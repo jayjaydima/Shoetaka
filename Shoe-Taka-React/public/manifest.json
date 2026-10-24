@@ -1,0 +1,17 @@
+{
+    "name": "Shoe Taka",
+    "short_name": "Shoe Taka",
+    "start_url": ".",
+    "background_color": "#d62828",
+    "theme_color": "#d62828",
+    "display": "standalone",
+    "icons": [
+        {"src": "/logo/192.png",
+         "sizes": "192x192", 
+         "type": "image/png"},
+
+        {"src": "/logo/512.png",
+         "sizes": "512x512",
+          "type": "image/png"}
+    ]
+}

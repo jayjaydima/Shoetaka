@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Admin = the signed-in user's profile document has role == "admin".
+    // The role lives in Firestore (users/{uid}), never in the React code.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ------------------------------------------------------------------
+    // users/{uid}
+    // ------------------------------------------------------------------
+    match /users/{uid} {
+
+      // You can read your own profile. Admins can read any profile.
+      allow read: if isOwner(uid) || isAdmin();
+
+      // A new profile can only be created for yourself, and ONLY as "student".
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'student'
+        && request.resource.data.keys().hasOnly([
+             'uid', 'displayName', 'email', 'photoURL',
+             'phone', 'address', 'role', 'createdAt'
+           ])
+        && request.resource.data.createdAt == request.time;
+
+      // You can edit ONLY these fields on your own profile.
+      // `role` and `email` are not in the list, so a user can never make
+      // themselves an admin. Admins can edit any profile.
+      allow update: if (
+          isOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['displayName', 'phone', 'address', 'photoURL', 'updatedAt'])
+        )
+        || isAdmin();
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // products/{productId}
+    // ------------------------------------------------------------------
+    function validProduct(p) {
+      return p.name is string && p.name.size() > 0 && p.name.size() <= 120
+        && p.brand is string
+        && p.code is string
+        && p.priceValue is number && p.priceValue >= 0
+        && p.image is string
+        && p.size is list && p.size.size() > 0 && p.size.size() <= 30;
+    }
+
+    match /products/{productId} {
+      // The store is public: anyone can browse products.
+      allow read: if true;
+
+      // Only admins can add / edit / delete.
+      allow create, update: if isAdmin() && validProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // orders/{orderId}
+    // ------------------------------------------------------------------
+    match /orders/{orderId} {
+
+      // Users read only their own orders. Admins read all orders.
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Checkout: you can only create an order for yourself, and it must
+      // start as "Processing".
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'Processing'
+        && request.resource.data.keys().hasOnly([
+             'userId', 'userEmail', 'orderNumber', 'status', 'items',
+             'total', 'buyer', 'paymentMethod', 'placedAt', 'updatedAt'
+           ])
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 50
+        && request.resource.data.total is number
+        && request.resource.data.total >= 0
+        && request.resource.data.buyer is map
+        && request.resource.data.paymentMethod in ['GCash', 'Maya', 'COD']
+        && request.resource.data.placedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isSignedIn() && (
+        // Admin: may change ONLY the status (and the updatedAt stamp).
+        (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'updatedAt'])
+          && request.resource.data.status in
+               ['Processing', 'Shipped', 'Delivered', 'Cancelled']
+        )
+        ||
+        // Customer: may only cancel their OWN order while it's still Processing.
+        (
+          resource.data.userId == request.auth.uid
+          && resource.data.status == 'Processing'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'updatedAt'])
+          && request.resource.data.status == 'Cancelled'
+        )
+      );
+
+      // Only admins can delete orders.
+      allow delete: if isAdmin();
+    }
+
+    // Everything else is denied by default.
+  }
+}
