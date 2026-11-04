@@ -6,6 +6,8 @@ const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(cors());
 
+const PORT = process.env.PORT || 8080;
+
 let products = [
     {
         id: 1,
@@ -117,6 +119,6 @@ app.delete("/api/product/:id", (req, res) => {
     });
 });
 
-app.listen(8080, () => {
-    console.log("Server running on port 8080");
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
