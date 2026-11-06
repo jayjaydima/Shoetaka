@@ -25,28 +25,30 @@ function normalizeProduct(product, fallbackId) {
     condition: String(product.condition || 'New').trim(),
     stock: Math.max(0, Number(product.stock) || 10),
     sellerId: product.sellerId || null,
+    status: ['pending', 'approved', 'rejected'].includes(product.status)
+      ? product.status
+      : product.sellerId ? 'pending' : 'approved',
+    rejectionReason: String(product.rejectionReason || ''),
     createdAtMs: Number(product.createdAtMs) || Date.now(),
     updatedAtMs: Number(product.updatedAtMs) || Date.now(),
   }
 }
 
 function readProducts() {
-  // TEMPORARY LOCAL STORAGE:
-  // Replace this with GET /api/products when Express is connected.
   const saved = readJSON(STORAGE_KEYS.products, null)
   if (Array.isArray(saved) && saved.length > 0) {
     return saved.map((p) => normalizeProduct(p))
   }
 
   const seeded = SEED_PRODUCTS.map((p, index) =>
-    normalizeProduct(p, p.id || `seed-${index}`)
+    normalizeProduct({ ...p, status: 'approved' }, p.id || `seed-${index}`)
   )
   writeJSON(STORAGE_KEYS.products, seeded)
   return seeded
 }
 
 export function ProductsProvider({ children }) {
-  const { firebaseUser } = useUser()
+  const { firebaseUser, isAdmin } = useUser()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -59,17 +61,17 @@ export function ProductsProvider({ children }) {
   function saveProducts(nextProducts) {
     const normalized = nextProducts.map((p) => normalizeProduct(p))
     setProducts(normalized)
-
-    // TEMPORARY LOCAL STORAGE:
-    // Replace this with POST/PATCH/DELETE /api/products later.
     writeJSON(STORAGE_KEYS.products, normalized)
   }
 
   function addProduct(data) {
+    const sellerId = data.sellerId || (isAdmin ? null : firebaseUser?.uid || null)
     const product = normalizeProduct(
       {
         ...data,
-        sellerId: data.sellerId || firebaseUser?.uid || null,
+        sellerId,
+        status: isAdmin || !sellerId ? 'approved' : 'pending',
+        rejectionReason: '',
         createdAtMs: Date.now(),
         updatedAtMs: Date.now(),
       },
@@ -83,21 +85,50 @@ export function ProductsProvider({ children }) {
     const existing = products.find((p) => p.id === id)
     if (!existing) throw new Error('Product not found.')
 
-    const next = products.map((p) =>
-      p.id === id
-        ? normalizeProduct({
-            ...p,
-            ...updates,
-            id,
-            sellerId: updates.sellerId ?? p.sellerId,
-            updatedAtMs: Date.now(),
-          })
-        : p
-    )
+    const next = products.map((p) => {
+      if (p.id !== id) return p
+      const safeUpdates = { ...updates }
+      if (!isAdmin) {
+        delete safeUpdates.status
+        delete safeUpdates.sellerId
+        safeUpdates.status = p.sellerId ? 'pending' : p.status
+        safeUpdates.rejectionReason = ''
+      }
+      return normalizeProduct({
+        ...p,
+        ...safeUpdates,
+        id,
+        sellerId: isAdmin ? (updates.sellerId ?? p.sellerId) : p.sellerId,
+        updatedAtMs: Date.now(),
+      })
+    })
     saveProducts(next)
   }
 
+  function reviewProduct(id, status, rejectionReason = '') {
+    if (!isAdmin) throw new Error('Only admins can review products.')
+    if (!['approved', 'rejected'].includes(status)) {
+      throw new Error('Invalid product review status.')
+    }
+    const existing = products.find((p) => p.id === id)
+    if (!existing) throw new Error('Product not found.')
+    saveProducts(products.map((p) =>
+      p.id === id
+        ? normalizeProduct({
+            ...p,
+            status,
+            rejectionReason: status === 'rejected' ? rejectionReason.trim() : '',
+            updatedAtMs: Date.now(),
+          })
+        : p
+    ))
+  }
+
   function deleteProduct(id) {
+    const product = products.find((p) => p.id === id)
+    if (!isAdmin && product?.sellerId !== firebaseUser?.uid) {
+      throw new Error('You can only delete your own products.')
+    }
     saveProducts(products.filter((p) => p.id !== id))
   }
 
@@ -112,8 +143,6 @@ export function ProductsProvider({ children }) {
             }
           : product
       )
-      // TEMPORARY LOCAL STORAGE:
-      // Replace this inventory update with the server-side stock transaction later.
       writeJSON(STORAGE_KEYS.products, next)
       return next
     })
@@ -122,7 +151,7 @@ export function ProductsProvider({ children }) {
   function seedProducts() {
     const existingIds = new Set(products.map((p) => p.id))
     const missing = SEED_PRODUCTS.filter((p) => !existingIds.has(p.id))
-      .map((p) => normalizeProduct(p))
+      .map((p) => normalizeProduct({ ...p, status: 'approved' }))
     if (missing.length === 0) return 0
     saveProducts([...products, ...missing])
     return missing.length
@@ -137,6 +166,7 @@ export function ProductsProvider({ children }) {
     deleteProduct,
     adjustStock,
     seedProducts,
+    reviewProduct,
   }
 
   return (
