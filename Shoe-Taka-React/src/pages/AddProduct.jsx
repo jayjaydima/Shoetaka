@@ -50,7 +50,7 @@ function AddProduct({ open, onClose }) {
     reader.readAsDataURL(file)
   }
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault()
     setError('')
     const sizes = form.sizes.split(',').map((size) => size.trim()).filter(Boolean)
@@ -68,7 +68,7 @@ function AddProduct({ open, onClose }) {
 
     try {
       setSaving(true)
-      await addProduct({
+      addProduct({
         name: form.name.trim(),
         brand: form.brand,
         code: form.code.trim(),

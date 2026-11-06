@@ -54,40 +54,8 @@ export function ProductsProvider({ children }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    let active = true
-
-    async function loadProducts() {
-      const localProducts = readProducts()
-      if (active) {
-        setProducts(localProducts)
-        setLoading(false)
-      }
-
-      try {
-        const response = await fetch('/api/product')
-        if (!response.ok) throw new Error('Could not load products from server.')
-        const serverProducts = await response.json()
-        if (!Array.isArray(serverProducts) || !active) return
-
-        // Keep seeded/local products and merge server records by ID.
-        const merged = [...localProducts]
-        const knownIds = new Set(merged.map((product) => String(product.id)))
-        serverProducts.forEach((item) => {
-          if (!knownIds.has(String(item.id))) merged.push(normalizeProduct(item))
-        })
-        if (active) {
-          setProducts(merged)
-          writeJSON(STORAGE_KEYS.products, merged)
-          setError('')
-        }
-      } catch (err) {
-        // The local catalog remains available while the API is offline.
-        if (active) setError(err.message || 'Product server is unavailable.')
-      }
-    }
-
-    loadProducts()
-    return () => { active = false }
+    setProducts(readProducts())
+    setLoading(false)
   }, [])
 
   function saveProducts(nextProducts) {
@@ -96,7 +64,7 @@ export function ProductsProvider({ children }) {
     writeJSON(STORAGE_KEYS.products, normalized)
   }
 
-  async function addProduct(data) {
+  function addProduct(data) {
     const sellerId = data.sellerId || (isAdmin ? null : firebaseUser?.uid || null)
     const product = normalizeProduct(
       {
@@ -109,20 +77,8 @@ export function ProductsProvider({ children }) {
       },
       createId('product')
     )
-    // Send the seller submission to Express before updating the local UI.
-    const response = await fetch('/api/product', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(product),
-    })
-    const result = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      throw new Error(result.message || 'Hindi ma-save ang product sa server.')
-    }
-
-    const savedProduct = normalizeProduct(result, product.id)
-    saveProducts([...products, savedProduct])
-    return savedProduct
+    saveProducts([...products, product])
+    return product
   }
 
   function updateProduct(id, updates) {

@@ -1,136 +1,124 @@
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 8080;
-const DATA_DIR = path.join(__dirname, "data");
-const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 
+app.use(express.json({ limit: "10mb" }));
 app.use(cors());
-app.use(express.json({ limit: "5mb" }));
 
-function readProducts() {
-  try {
-    if (!fs.existsSync(PRODUCTS_FILE)) return [];
-    const parsed = JSON.parse(fs.readFileSync(PRODUCTS_FILE, "utf8"));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("[PRODUCTS] Could not read saved products:", error.message);
-    return [];
-  }
-}
+const PORT = process.env.PORT || 8080;
 
-let products = readProducts();
+let products = [
+    {
+        id: 1,
+        product: "A1 jordan",
+        buy: "1800",
+        sell: "3499",
+        stock: "10",
+        image: ""
+    },
+    {
+        id: 2,
+        product: "nike-melo",
+        buy: "2200",
+        sell: " 3799",
+        stock: "6",
+        image: ""
+    },
+    {
+        id: 3,
+        product: "puma-vintage",
+        buy: "1700",
+        sell: "3699",
+        stock: "15",
+        image: ""
+    },
+    {
+        id: 4,
+        product: "adidas-samba",
+        buy: "2500",
+        sell: "3599",
+        stock: "20",
+        image: ""
+    }
+];
 
-function saveProducts() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
-}
+let nextID = 5;
 
-function validateProduct(body) {
-  const priceValue = Number(body.priceValue);
-  const stock = Number(body.stock);
-  const sizes = Array.isArray(body.size) ? body.size.map(String).filter(Boolean) : [];
-
-  if (!String(body.name || "").trim()) return "Product name is required.";
-  if (!String(body.code || "").trim()) return "Product code is required.";
-  if (!Number.isFinite(priceValue) || priceValue <= 0) return "A valid selling price is required.";
-  if (!Number.isInteger(stock) || stock < 0) return "Stock must be a whole number greater than or equal to zero.";
-  if (sizes.length === 0) return "At least one shoe size is required.";
-  if (body.image && typeof body.image !== "string") return "Invalid product image.";
-  return null;
-}
-
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", service: "shoe-taka-api" });
-});
-
-app.get("/api/product", (_req, res) => {
-  res.json(products);
+app.get("/api/product", (req, res) => {
+    res.json(products);
 });
 
 app.post("/api/product", (req, res) => {
-  const validationError = validateProduct(req.body || {});
-  if (validationError) return res.status(400).json({ message: validationError });
+    const newProduct = {
+        id: nextID,
+        product: req.body.product,
+        buy: req.body.buy,
+        sell: req.body.sell,
+        stock: req.body.stock,
+        image: req.body.image || ""
+    };
 
-  const sellerId = req.body.sellerId ? String(req.body.sellerId) : null;
-  const product = {
-    id: `product-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    name: String(req.body.name).trim(),
-    brand: String(req.body.brand || "").trim().toUpperCase(),
-    code: String(req.body.code).trim().toUpperCase(),
-    priceValue: Number(req.body.priceValue),
-    stock: Number(req.body.stock),
-    size: req.body.size.map(String).filter(Boolean),
-    image: String(req.body.image || ""),
-    description: String(req.body.description || "").trim(),
-    condition: String(req.body.condition || "New"),
-    sellerId,
-    status: sellerId ? "pending" : "approved",
-    rejectionReason: "",
-    createdAtMs: Date.now(),
-    updatedAtMs: Date.now(),
-  };
+    nextID++;
 
-  products.push(product);
-  try {
-    saveProducts();
-  } catch (error) {
-    products = products.filter((item) => item.id !== product.id);
-    console.error("[PRODUCTS] Could not save product:", error);
-    return res.status(500).json({ message: "Could not save product on the server." });
-  }
+    products.push(newProduct);
 
-  console.log("[ADDED]", { ...product, image: product.image ? "(has image)" : "" });
-  return res.status(201).json(product);
+    console.log("\n[ADDED]", { ...newProduct, image: newProduct.image ? "(has image)" : "" });
+    res.status(201).json(newProduct);
 });
 
 app.put("/api/product/:id", (req, res) => {
-  const index = products.findIndex((item) => String(item.id) === String(req.params.id));
-  if (index === -1) return res.status(404).json({ message: "Product not found." });
+    const id = Number(req.params.id);
 
-  const validationError = validateProduct(req.body || {});
-  if (validationError) return res.status(400).json({ message: validationError });
+    const editID = products.findIndex(
+        (item) => item.id === id
+    );
 
-  const current = products[index];
-  products[index] = {
-    ...current,
-    name: String(req.body.name).trim(),
-    brand: String(req.body.brand || "").trim().toUpperCase(),
-    code: String(req.body.code).trim().toUpperCase(),
-    priceValue: Number(req.body.priceValue),
-    stock: Number(req.body.stock),
-    size: req.body.size.map(String).filter(Boolean),
-    image: String(req.body.image || ""),
-    description: String(req.body.description || "").trim(),
-    updatedAtMs: Date.now(),
-  };
+    if (editID === -1) {
+        return res.status(404).json({
+            message: "Product not found"
+        });
+    }
+   const oldProduct = products[editID];
+    products[editID] = {
+        id: id,
+        product: req.body.product,
+        buy: req.body.buy,
+        sell: req.body.sell,
+        stock: req.body.stock,
+        image: req.body.image || ""
 
-  try {
-    saveProducts();
-  } catch (error) {
-    products[index] = current;
-    return res.status(500).json({ message: "Could not update product on the server." });
-  }
-  return res.json(products[index]);
+    };
+
+    console.log("\n[UPDATED]", { ...products[editID], image: products[editID].image ? "(has image)" : "" });
+
+    res.json(products[editID]);
 });
 
 app.delete("/api/product/:id", (req, res) => {
-  const index = products.findIndex((item) => String(item.id) === String(req.params.id));
-  if (index === -1) return res.status(404).json({ message: "Product not found." });
+    const id = Number(req.params.id);
 
-  const [deleted] = products.splice(index, 1);
-  try {
-    saveProducts();
-  } catch (error) {
-    products.splice(index, 0, deleted);
-    return res.status(500).json({ message: "Could not delete product on the server." });
-  }
-  return res.json({ message: "Product deleted successfully.", product: deleted });
+    const deleteID = products.findIndex(
+        (item) => item.id === id
+    );
+
+    if (deleteID === -1) {
+        return res.status(404).json({
+            message: "Product not found"
+        });
+    }
+
+    const deletedProduct = products[deleteID];
+
+    products.splice(deleteID, 1);
+
+    console.log("\n[DELETED]", { ...deletedProduct, image: deletedProduct.image ? "(has image)" : "" });
+    res.json({
+        message: "Product deleted successfully",
+        product: deletedProduct
+    });
 });
 
 app.listen(PORT, () => {
-  console.log(`Shoe Taka API running at http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
