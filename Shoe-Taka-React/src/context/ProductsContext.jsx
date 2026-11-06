@@ -127,7 +127,11 @@ export function ProductsProvider({ children }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // Send compatible name keys so the API can read the product name
+        // regardless of which form naming convention is used.
         product: product.name,
+        name: product.name,
+        productName: product.name,
         buy: String(data.buy ?? '0'),
         sell: String(product.priceValue),
         stock: String(product.stock),

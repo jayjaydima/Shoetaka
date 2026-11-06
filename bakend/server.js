@@ -59,7 +59,10 @@ app.get('/api/product', async (req, res) => {
 app.post('/api/product', async (req, res) => {
     try {
         // Accept both the current React field names and common form field aliases.
-        const product = String(req.body.product ?? req.body.name ?? '').trim();
+        const body = req.body || {};
+        const productValue = body.product ?? body.name ?? body.productName ?? body.product_name ?? body.shoeName ?? body.title ?? body.productData?.name ?? '';
+        const product = String(typeof productValue === 'object' && productValue !== null ? (productValue.name ?? '') : productValue).trim();
+        console.log('Add product fields received:', Object.keys(body));
         const buy = Number(req.body.buy ?? req.body.buyPrice ?? 0);
         const sell = Number(req.body.sell ?? req.body.priceValue ?? req.body.price ?? 0);
         const stock = Number(req.body.stock ?? 0);
