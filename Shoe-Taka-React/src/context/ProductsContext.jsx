@@ -54,8 +54,40 @@ export function ProductsProvider({ children }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    setProducts(readProducts())
-    setLoading(false)
+    let active = true
+
+    async function loadProducts() {
+      const localProducts = readProducts()
+      if (active) {
+        setProducts(localProducts)
+        setLoading(false)
+      }
+
+      try {
+        const response = await fetch('/api/product')
+        if (!response.ok) throw new Error('Could not load products from server.')
+        const serverProducts = await response.json()
+        if (!Array.isArray(serverProducts) || !active) return
+
+        // Keep seeded/local products and merge server records by ID.
+        const merged = [...localProducts]
+        const knownIds = new Set(merged.map((product) => String(product.id)))
+        serverProducts.forEach((item) => {
+          if (!knownIds.has(String(item.id))) merged.push(normalizeProduct(item))
+        })
+        if (active) {
+          setProducts(merged)
+          writeJSON(STORAGE_KEYS.products, merged)
+          setError('')
+        }
+      } catch (err) {
+        // The local catalog remains available while the API is offline.
+        if (active) setError(err.message || 'Product server is unavailable.')
+      }
+    }
+
+    loadProducts()
+    return () => { active = false }
   }, [])
 
   function saveProducts(nextProducts) {
