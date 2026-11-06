@@ -20,6 +20,7 @@ function Cart() {
   const [paymentMethod, setPaymentMethod] = useState('COD')
   const [checkoutError, setCheckoutError] = useState('')
   const [placing, setPlacing] = useState(false)
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false)
 
   async function handleCheckout() {
     if (!buyerName.trim() || !buyerAddress.trim() || !buyerContact.trim()) {
@@ -37,6 +38,7 @@ function Cart() {
         },
         paymentMethod
       )
+      setCheckoutModalOpen(false)
       navigate('/orders')
     } catch (err) {
       console.error('Checkout failed:', err)
@@ -130,28 +132,63 @@ function Cart() {
                 <p className="cart-summary-caption">Shipping fees, if applicable, will be confirmed with your order.</p>
               </section>
 
-              <section className="cart-checkout-card">
+              <section className="cart-checkout-card cart-checkout-launcher">
                 <div className="cart-checkout-title">
-                  <span>01</span>
-                  <div><h2>Delivery details</h2><p>Where should we send your shoes?</p></div>
+                  <span>✓</span>
+                  <div><h2>Ready to checkout?</h2><p>Review your items and complete your delivery details in the checkout window.</p></div>
                 </div>
+                <button className="btn-primary cart-checkout-button" type="button" onClick={() => { setCheckoutError(''); setCheckoutModalOpen(true) }}>
+                  Place order · {money(cartTotal)}
+                </button>
+                <p className="cart-checkout-footnote">Your order details and final confirmation will appear in the checkout modal.</p>
+              </section>
+            </aside>
+          </div>
+        )}
+      </main>
+        {checkoutModalOpen && (
+          <div className="checkout-modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !placing) setCheckoutModalOpen(false) }}>
+            <section className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
+              <button className="checkout-modal-close" type="button" aria-label="Close checkout" onClick={() => setCheckoutModalOpen(false)} disabled={placing}>×</button>
+              <div className="checkout-modal-heading">
+                <p className="brand-code">SHOE TAKA CHECKOUT</p>
+                <h2 id="checkout-modal-title">Confirm your order</h2>
+                <p>Review the shoes you are ordering and confirm your delivery information.</p>
+              </div>
+              <div className="checkout-modal-items">
+                <h3>Items to order <span>{itemCount}</span></h3>
+                {entries.map(([cartKey, qty]) => {
+                  const { productId, size } = parseCartKey(cartKey)
+                  const p = PRODUCTS.find((prod) => prod.id === productId)
+                  if (!p) return null
+                  return (
+                    <article className="checkout-modal-item" key={cartKey}>
+                      <img src={p.image} alt={p.name} />
+                      <div className="checkout-modal-item-info">
+                        <strong>{p.name}</strong>
+                        <span>Size {size} · Qty {qty}</span>
+                      </div>
+                      <strong className="checkout-modal-item-price">{money(p.priceValue * qty)}</strong>
+                    </article>
+                  )
+                })}
+                <div className="checkout-modal-total"><span>Order total</span><strong>{money(cartTotal)}</strong></div>
+              </div>
+              <div className="checkout-modal-form">
+                <div className="cart-checkout-title"><span>01</span><div><h3>Delivery details</h3><p>Where should we send your shoes?</p></div></div>
                 <div className="cart-form-field">
                   <label htmlFor="cart-buyer-name">Full name</label>
                   <input id="cart-buyer-name" type="text" placeholder="Enter your full name" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
                 </div>
                 <div className="cart-form-field">
                   <label htmlFor="cart-buyer-address">Delivery address</label>
-                  <textarea id="cart-buyer-address" rows="3" placeholder="House number, street, barangay, city" value={buyerAddress} onChange={(e) => setBuyerAddress(e.target.value)} />
+                  <textarea id="cart-buyer-address" rows="2" placeholder="House number, street, barangay, city" value={buyerAddress} onChange={(e) => setBuyerAddress(e.target.value)} />
                 </div>
                 <div className="cart-form-field">
                   <label htmlFor="cart-buyer-contact">Contact number</label>
                   <input id="cart-buyer-contact" type="tel" placeholder="09XX XXX XXXX" value={buyerContact} onChange={(e) => setBuyerContact(e.target.value)} />
                 </div>
-
-                <div className="cart-checkout-title cart-payment-title">
-                  <span>02</span>
-                  <div><h2>Payment method</h2><p>Choose how you want to pay.</p></div>
-                </div>
+                <div className="cart-checkout-title cart-payment-title"><span>02</span><div><h3>Payment method</h3><p>Choose how you want to pay.</p></div></div>
                 <div className="cart-payment-options">
                   {['GCash', 'Maya', 'COD'].map((method) => (
                     <label key={method} className={`cart-payment-option ${paymentMethod === method ? 'selected' : ''}`}>
@@ -161,15 +198,16 @@ function Cart() {
                   ))}
                 </div>
                 {checkoutError && <div className="cart-checkout-error" role="alert">{checkoutError}</div>}
+              </div>
+              <div className="checkout-modal-actions">
+                <button className="cart-continue-btn" type="button" onClick={() => setCheckoutModalOpen(false)} disabled={placing}>Back to cart</button>
                 <button className="btn-primary cart-checkout-button" type="button" onClick={handleCheckout} disabled={placing}>
-                  {placing ? 'Placing order...' : 'Place order · ' + money(cartTotal)}
+                  {placing ? 'Placing order...' : 'Confirm place order · ' + money(cartTotal)}
                 </button>
-                <p className="cart-checkout-footnote">Please review your items and delivery information before placing your order.</p>
-              </section>
-            </aside>
+              </div>
+            </section>
           </div>
         )}
-      </main>
     </div>
   )
 }
