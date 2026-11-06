@@ -139,18 +139,18 @@ export function CartProvider({ children }) {
   }
 
   // ---------------- Cart actions ----------------
-  function addToCart(productId, size) {
+  function addToCart(productId, size, quantity = 1) {
     const product = products.find((item) => item.id === productId)
     const key = makeCartKey(productId, size)
 
-    if (!product || product.stock <= 0) return
+    if (!product || product.stock <= 0 || !Number.isInteger(quantity) || quantity < 1) return
 
     setCart((prev) => {
       const currentQty = prev[key] || 0
-      if (currentQty >= product.stock) return prev
+      if (currentQty + quantity > product.stock) return prev
       return {
         ...prev,
-        [key]: currentQty + 1,
+        [key]: currentQty + quantity,
       }
     })
   }
