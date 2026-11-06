@@ -1181,3 +1181,196 @@ footer {
   letter-spacing: -0.04em;
   color: var(--ink);
 }
+
+
+/* =========================================================
+   GLOBAL SHOE TAKA TAN PALETTE
+   Applied across landing, store, student, seller and admin pages
+   ========================================================= */
+:root {
+  --shoe-tan: #c8a27a;
+  --shoe-dark-tan: #a9825c;
+  --shoe-white: #fff;
+  --shoe-cream: #faf7f2;
+  --shoe-dark: #24211d;
+  --shoe-line: #e6ddd2;
+
+  /* Legacy application tokens mapped to the brand palette */
+  --ink: var(--shoe-dark);
+  --paper: var(--shoe-white);
+  --stone: var(--shoe-cream);
+  --line: var(--shoe-line);
+  --accent: var(--shoe-tan);
+
+  --shoe-navy: var(--shoe-dark);
+  --shoe-navy-2: var(--shoe-dark);
+  --shoe-yellow: var(--shoe-tan);
+  --shoe-light: var(--shoe-cream);
+  --shoe-text: var(--shoe-dark);
+}
+
+html, body, #root {
+  background: var(--shoe-cream);
+  color: var(--shoe-dark);
+}
+
+body { accent-color: var(--shoe-tan); }
+
+/* Landing page: remove the old navy/yellow styling */
+.shoe-landing {
+  --shoe-tan: #c8a27a;
+  --shoe-dark-tan: #a9825c;
+  --shoe-white: #fff;
+  --shoe-cream: #faf7f2;
+  --shoe-dark: #24211d;
+  --shoe-line: #e6ddd2;
+  background: var(--shoe-cream) !important;
+  color: var(--shoe-dark) !important;
+}
+.shoe-landing .shoe-navbar,
+.shoe-landing .shoe-hero,
+.shoe-landing .shoe-dark-section,
+.shoe-landing .shoe-cta,
+.shoe-landing .shoe-footer,
+.shoe-landing .shoe-login-wrap {
+  background: var(--shoe-dark) !important;
+}
+.shoe-landing .shoe-light-section,
+.shoe-landing .feature-card {
+  background: var(--shoe-white) !important;
+  color: var(--shoe-dark) !important;
+}
+.shoe-landing .shoe-navbar .nav-link,
+.shoe-landing .shoe-footer a,
+.shoe-landing .shoe-hero,
+.shoe-landing .shoe-dark-section,
+.shoe-landing .shoe-cta {
+  color: var(--shoe-white) !important;
+}
+.shoe-landing .shoe-kicker,
+.shoe-landing .section-label,
+.shoe-landing .shoe-navbar .nav-link:hover,
+.shoe-landing .shoe-navbar .nav-link.active,
+.shoe-landing .shoe-footer a:hover,
+.shoe-landing .shoe-red-text,
+.shoe-landing .text-warning {
+  color: var(--shoe-tan) !important;
+}
+.shoe-landing .shoe-logo-mark,
+.shoe-landing .shoe-login-logo,
+.shoe-landing .feature-icon,
+.shoe-landing .benefit > span {
+  background: var(--shoe-tan) !important;
+  color: var(--shoe-dark) !important;
+  border-color: var(--shoe-tan) !important;
+}
+.shoe-landing .shoe-btn-yellow,
+.shoe-landing .shoe-btn-red,
+.shoe-landing .shoe-btn-outline:hover {
+  background: var(--shoe-tan) !important;
+  border-color: var(--shoe-tan) !important;
+  color: var(--shoe-dark) !important;
+}
+.shoe-landing .shoe-btn-yellow:hover,
+.shoe-landing .shoe-btn-red:hover {
+  background: var(--shoe-dark-tan) !important;
+  border-color: var(--shoe-dark-tan) !important;
+}
+.shoe-landing .shoe-btn-outline {
+  border-color: var(--shoe-tan) !important;
+  color: var(--shoe-white) !important;
+}
+.shoe-landing .hero-shoe-frame { border-color: var(--shoe-tan) !important; }
+.shoe-landing .shoe-image-card,
+.shoe-landing .inventory-visual {
+  background: linear-gradient(135deg, var(--shoe-tan) 0 9%, transparent 9% 100%) !important;
+}
+.shoe-landing .shoe-image-card::before,
+.shoe-landing .inventory-visual::before { background: var(--shoe-tan) !important; }
+.shoe-landing .hero-shoe-deco { color: rgba(200,162,122,.35) !important; }
+.shoe-landing .section-heading { color: var(--shoe-dark) !important; }
+
+/* All marketplace, account, seller and admin surfaces */
+.nav,
+.mode-switch,
+.project-card,
+.product-card,
+.market-stat-card,
+.market-panel,
+.profile-summary,
+.profile-form-card,
+.product-editor,
+.seller-product-card,
+.notification-panel,
+.order-card,
+.admin-stat-card,
+.admin-form-card,
+.admin-table-wrap,
+.admin-order-card,
+.login-card {
+  border-color: var(--shoe-line) !important;
+  background-color: var(--shoe-white);
+}
+.nav { background: var(--shoe-white) !important; border-bottom-color: var(--shoe-line) !important; }
+.nav-logo, .nav-btn, .nav-avatar, .market-panel-head a,
+.quick-action, .notification-row, .admin-page-title,
+.admin-section-title, .admin-stat-value { color: var(--shoe-dark) !important; }
+.dot, .cart-count, .notification-dot, .notification-badge {
+  background: var(--shoe-tan) !important;
+  color: var(--shoe-dark) !important;
+}
+.nav-btn:hover, .quick-action:hover, .notification-row:hover { background: var(--shoe-cream) !important; }
+.nav-btn.active-view, .mode-switch button.active, .nav-out,
+.profile-mode-tag, .btn-primary, .brand-filter.active,
+.brand-filter:hover, .shoe-btn-yellow, .admin-page .shoe-btn-yellow {
+  background: var(--shoe-dark) !important;
+  border-color: var(--shoe-dark) !important;
+  color: var(--shoe-white) !important;
+}
+.nav-out:hover, .btn-primary:hover, .admin-page .shoe-btn-yellow:hover {
+  background: var(--shoe-dark-tan) !important;
+  border-color: var(--shoe-dark-tan) !important;
+  color: var(--shoe-white) !important;
+}
+.btn-ghost, .brand-filter, .qty-btn, .cart-pill, .nav-avatar,
+.mode-switch, .quick-action, .market-list-icon, .market-stat-card > i,
+.profile-avatar-large, .notification-icon, .admin-badge {
+  border-color: var(--shoe-tan) !important;
+}
+.accent, .product-price, .market-kicker, .admin-page-kicker { color: var(--shoe-dark-tan) !important; }
+.store-wrap, .login-wrap { background: var(--shoe-cream) !important; }
+.cart-row img, .admin-thumb, .admin-order-head, .product-upload-preview,
+.seller-product-card > img, .order-item-row img { background: var(--shoe-cream) !important; }
+.empty-state, .seller-empty, .admin-empty { border-color: var(--shoe-line) !important; background: var(--shoe-white) !important; }
+.admin-table th { border-bottom-color: var(--shoe-line) !important; }
+.admin-table td, .market-list-row, .seller-mini-stat, .order-card-head,
+.order-item-row, .cart-row { border-color: var(--shoe-line) !important; }
+
+/* Bootstrap controls and semantic utility colors use the same brand palette */
+.btn-primary, .btn-warning, .btn-danger, .btn-success {
+  background-color: var(--shoe-tan) !important;
+  border-color: var(--shoe-tan) !important;
+  color: var(--shoe-dark) !important;
+}
+.btn-primary:hover, .btn-warning:hover, .btn-danger:hover, .btn-success:hover {
+  background-color: var(--shoe-dark-tan) !important;
+  border-color: var(--shoe-dark-tan) !important;
+  color: var(--shoe-white) !important;
+}
+.btn-outline-primary, .btn-outline-warning, .btn-outline-danger, .btn-outline-success {
+  color: var(--shoe-dark-tan) !important;
+  border-color: var(--shoe-tan) !important;
+}
+.btn-outline-primary:hover, .btn-outline-warning:hover,
+.btn-outline-danger:hover, .btn-outline-success:hover {
+  background: var(--shoe-tan) !important;
+  border-color: var(--shoe-tan) !important;
+  color: var(--shoe-dark) !important;
+}
+a { text-decoration-color: var(--shoe-tan); }
+.form-control:focus, .form-select:focus, input:focus, select:focus, textarea:focus {
+  border-color: var(--shoe-tan) !important;
+  box-shadow: 0 0 0 .2rem rgba(200,162,122,.2) !important;
+}
+.form-check-input:checked { background-color: var(--shoe-dark-tan) !important; border-color: var(--shoe-dark-tan) !important; }
+::selection { background: var(--shoe-tan); color: var(--shoe-dark); }
