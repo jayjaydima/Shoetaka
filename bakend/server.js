@@ -58,16 +58,54 @@ app.get('/api/product', async (req, res) => {
 // ADD product
 app.post('/api/product', async (req, res) => {
     try {
-        const { product, buy, sell, stock, image, sellerId, status } = req.body;
+        // Accept both the current React field names and common form field aliases.
+        const product = String(req.body.product ?? req.body.name ?? '').trim();
+        const buy = Number(req.body.buy ?? req.body.buyPrice ?? 0);
+        const sell = Number(req.body.sell ?? req.body.priceValue ?? req.body.price ?? 0);
+        const stock = Number(req.body.stock ?? 0);
+        const image = String(req.body.image ?? '');
+        const sellerId = req.body.sellerId ? String(req.body.sellerId) : null;
+        const requestedStatus = req.body.status;
+        const status = ['pending', 'approved', 'rejected'].includes(requestedStatus)
+            ? requestedStatus
+            : (sellerId ? 'pending' : 'approved');
+
+        if (!product) {
+            return res.status(400).json({ message: 'Product name is required.' });
+        }
+        if (product.length > 100) {
+            return res.status(400).json({ message: 'Product name must be 100 characters or fewer.' });
+        }
+        if (!Number.isFinite(buy) || buy < 0 || !Number.isFinite(sell) || sell < 0) {
+            return res.status(400).json({ message: 'Buy and sell prices must be valid non-negative numbers.' });
+        }
+        if (!Number.isInteger(stock) || stock < 0) {
+            return res.status(400).json({ message: 'Stock must be a non-negative whole number.' });
+        }
 
         const [result] = await db.query(
             'INSERT INTO products (seller_id, product_name, buy_price, sell_price, stock, image, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [sellerId || null, product, buy || 0, sell || 0, stock || 0, image || '', status || 'pending']
+            [sellerId, product, buy, sell, stock, image, status]
         );
 
-        res.json({ id: result.insertId, product, buy, sell, stock, image, sellerId, status });
+        console.log('Product inserted into MySQL. product_id:', result.insertId);
+        res.status(201).json({
+            id: result.insertId,
+            product,
+            buy: String(buy),
+            sell: String(sell),
+            stock: String(stock),
+            image,
+            sellerId,
+            status
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('POST /api/product MySQL error:', error.code || '', error.message);
+        res.status(500).json({
+            message: 'Hindi na-save ang product sa MySQL.',
+            details: error.message,
+            code: error.code || null
+        });
     }
 });
 
