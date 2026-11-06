@@ -54,8 +54,50 @@ export function ProductsProvider({ children }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    setProducts(readProducts())
+    let active = true
+    const localProducts = readProducts()
+    setProducts(localProducts)
     setLoading(false)
+
+    async function syncServerProducts() {
+      try {
+        const response = await fetch('/api/product')
+        if (!response.ok) throw new Error('Hindi makuha ang products mula sa server.')
+        const serverItems = await response.json()
+        if (!Array.isArray(serverItems) || !active) return
+
+        const serverProducts = serverItems.map((item) => normalizeProduct({
+          id: item.id,
+          name: item.product,
+          brand: item.brand || '',
+          code: item.code || '',
+          priceValue: Number(item.sell) || 0,
+          stock: Number(item.stock) || 0,
+          image: item.image || '/items/samba.avif',
+          size: item.size || ['7', '8', '9', '10'],
+          description: item.description || '',
+          sellerId: item.sellerId || null,
+          status: item.status || (item.sellerId ? 'pending' : 'approved'),
+          rejectionReason: item.rejectionReason || '',
+        }))
+        const merged = [...localProducts]
+        serverProducts.forEach((serverProduct) => {
+          const index = merged.findIndex((item) => String(item.id) === String(serverProduct.id))
+          if (index >= 0) merged[index] = serverProduct
+          else merged.push(serverProduct)
+        })
+        if (active) {
+          setProducts(merged)
+          writeJSON(STORAGE_KEYS.products, merged)
+          setError('')
+        }
+      } catch (err) {
+        if (active) setError(err.message || 'Product server is unavailable.')
+      }
+    }
+
+    syncServerProducts()
+    return () => { active = false }
   }, [])
 
   function saveProducts(nextProducts) {
@@ -64,7 +106,7 @@ export function ProductsProvider({ children }) {
     writeJSON(STORAGE_KEYS.products, normalized)
   }
 
-  function addProduct(data) {
+  async function addProduct(data) {
     const sellerId = data.sellerId || (isAdmin ? null : firebaseUser?.uid || null)
     const product = normalizeProduct(
       {
@@ -77,32 +119,86 @@ export function ProductsProvider({ children }) {
       },
       createId('product')
     )
-    saveProducts([...products, product])
-    return product
+
+    const response = await fetch('/api/product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product: product.name,
+        buy: String(data.buy ?? '0'),
+        sell: String(product.priceValue),
+        stock: String(product.stock),
+        image: product.image,
+        brand: product.brand,
+        code: product.code,
+        size: product.size,
+        description: product.description,
+        sellerId: product.sellerId,
+        status: product.status,
+      }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.message || 'Hindi ma-save ang product sa server.')
+
+    const savedProduct = normalizeProduct({
+      ...product,
+      ...result,
+      id: result.id,
+      name: result.product || product.name,
+      priceValue: Number(result.sell ?? product.priceValue),
+      stock: Number(result.stock ?? product.stock),
+      image: result.image || product.image,
+      brand: result.brand || product.brand,
+      code: result.code || product.code,
+      size: result.size || product.size,
+    })
+    saveProducts([...products, savedProduct])
+    return savedProduct
   }
 
-  function updateProduct(id, updates) {
+  async function updateProduct(id, updates) {
     const existing = products.find((p) => p.id === id)
     if (!existing) throw new Error('Product not found.')
 
-    const next = products.map((p) => {
-      if (p.id !== id) return p
-      const safeUpdates = { ...updates }
-      if (!isAdmin) {
-        delete safeUpdates.status
-        delete safeUpdates.sellerId
-        safeUpdates.status = p.sellerId ? 'pending' : p.status
-        safeUpdates.rejectionReason = ''
-      }
-      return normalizeProduct({
-        ...p,
-        ...safeUpdates,
-        id,
-        sellerId: isAdmin ? (updates.sellerId ?? p.sellerId) : p.sellerId,
-        updatedAtMs: Date.now(),
-      })
+    const safeUpdates = { ...updates }
+    if (!isAdmin) {
+      delete safeUpdates.status
+      delete safeUpdates.sellerId
+      safeUpdates.status = existing.sellerId ? 'pending' : existing.status
+      safeUpdates.rejectionReason = ''
+    }
+    const updatedProduct = normalizeProduct({
+      ...existing,
+      ...safeUpdates,
+      id,
+      sellerId: isAdmin ? (updates.sellerId ?? existing.sellerId) : existing.sellerId,
+      updatedAtMs: Date.now(),
     })
-    saveProducts(next)
+
+    if (Number.isFinite(Number(id))) {
+      const response = await fetch(`/api/product/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: updatedProduct.name,
+          buy: String(updates.buy ?? existing.buy ?? '0'),
+          sell: String(updatedProduct.priceValue),
+          stock: String(updatedProduct.stock),
+          image: updatedProduct.image,
+          brand: updatedProduct.brand,
+          code: updatedProduct.code,
+          size: updatedProduct.size,
+          description: updatedProduct.description,
+          sellerId: updatedProduct.sellerId,
+          status: updatedProduct.status,
+        }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.message || 'Hindi ma-update ang product sa server.')
+    }
+
+    saveProducts(products.map((p) => p.id === id ? updatedProduct : p))
+    return updatedProduct
   }
 
   function reviewProduct(id, status, rejectionReason = '') {
@@ -124,11 +220,18 @@ export function ProductsProvider({ children }) {
     ))
   }
 
-  function deleteProduct(id) {
+  async function deleteProduct(id) {
     const product = products.find((p) => p.id === id)
     if (!isAdmin && product?.sellerId !== firebaseUser?.uid) {
       throw new Error('You can only delete your own products.')
     }
+
+    if (Number.isFinite(Number(id))) {
+      const response = await fetch(`/api/product/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.message || 'Hindi ma-delete ang product sa server.')
+    }
+
     saveProducts(products.filter((p) => p.id !== id))
   }
 
