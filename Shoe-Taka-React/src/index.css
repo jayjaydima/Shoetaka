@@ -1746,3 +1746,201 @@ a { text-decoration-color: var(--shoe-tan); }
   from { opacity: 0; transform: translateY(-5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+
+/* =========================================================
+   SHOE TAKA THEME SWITCH — persistent light / dark palettes
+   ========================================================= */
+:root {
+  color-scheme: light;
+  --theme-bg: #faf7f2;
+  --theme-surface: #ffffff;
+  --theme-surface-alt: #f4eee6;
+  --theme-text: #24211d;
+  --theme-muted: #756b61;
+  --theme-border: #e6ddd2;
+  --theme-shadow: rgba(36, 33, 29, .08);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --theme-bg: #171513;
+  --theme-surface: #24211d;
+  --theme-surface-alt: #302a24;
+  --theme-text: #f7f1e9;
+  --theme-muted: #c1b5a7;
+  --theme-border: #51463b;
+  --theme-shadow: rgba(0, 0, 0, .28);
+}
+html[data-theme="dark"], html[data-theme="dark"] body,
+html[data-theme="dark"] #root {
+  background: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .store-wrap,
+html[data-theme="dark"] .login-wrap,
+html[data-theme="dark"] .student-dashboard,
+html[data-theme="dark"] .seller-dashboard,
+html[data-theme="dark"] .admin-page,
+html[data-theme="dark"] .profile-page,
+html[data-theme="dark"] .orders-page,
+html[data-theme="dark"] .cart-page {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] .nav,
+html[data-theme="dark"] .site-nav-shell,
+html[data-theme="dark"] .site-nav-mobile-menu,
+html[data-theme="dark"] .market-panel,
+html[data-theme="dark"] .product-card,
+html[data-theme="dark"] .market-stat-card,
+html[data-theme="dark"] .project-card,
+html[data-theme="dark"] .profile-summary,
+html[data-theme="dark"] .profile-form-card,
+html[data-theme="dark"] .product-editor,
+html[data-theme="dark"] .seller-product-card,
+html[data-theme="dark"] .notification-panel,
+html[data-theme="dark"] .notification-row,
+html[data-theme="dark"] .order-card,
+html[data-theme="dark"] .admin-stat-card,
+html[data-theme="dark"] .admin-form-card,
+html[data-theme="dark"] .admin-table-wrap,
+html[data-theme="dark"] .admin-order-card,
+html[data-theme="dark"] .login-card,
+html[data-theme="dark"] .empty-state,
+html[data-theme="dark"] .seller-empty,
+html[data-theme="dark"] .admin-empty,
+html[data-theme="dark"] .cart-summary,
+html[data-theme="dark"] .cart-row {
+  background: var(--theme-surface) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 8px 28px var(--theme-shadow);
+}
+html[data-theme="dark"] .site-nav-brand,
+html[data-theme="dark"] .site-nav-brand:hover,
+html[data-theme="dark"] .site-nav-link,
+html[data-theme="dark"] .site-nav-icon-link,
+html[data-theme="dark"] .site-nav-profile,
+html[data-theme="dark"] .site-nav-profile:hover,
+html[data-theme="dark"] .site-nav-menu-toggle,
+html[data-theme="dark"] .site-nav-mobile-menu a,
+html[data-theme="dark"] .site-nav-mobile-menu button,
+html[data-theme="dark"] .nav-logo,
+html[data-theme="dark"] .nav-btn,
+html[data-theme="dark"] .admin-page-title,
+html[data-theme="dark"] .admin-section-title,
+html[data-theme="dark"] .market-panel-head a,
+html[data-theme="dark"] .quick-action,
+html[data-theme="dark"] .notification-row,
+html[data-theme="dark"] .product-title,
+html[data-theme="dark"] .store-wrap h1,
+html[data-theme="dark"] .store-wrap h2,
+html[data-theme="dark"] .store-wrap h3,
+html[data-theme="dark"] .store-wrap h4,
+html[data-theme="dark"] .admin-page h1,
+html[data-theme="dark"] .admin-page h2,
+html[data-theme="dark"] .admin-page h3 {
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] .site-nav-link:hover,
+html[data-theme="dark"] .site-nav-link.is-active,
+html[data-theme="dark"] .site-nav-icon-link:hover,
+html[data-theme="dark"] .site-nav-icon-link.is-active,
+html[data-theme="dark"] .site-nav-mobile-menu a:hover,
+html[data-theme="dark"] .site-nav-mobile-menu button:hover,
+html[data-theme="dark"] .site-nav-mobile-menu a.is-active,
+html[data-theme="dark"] .nav-btn:hover,
+html[data-theme="dark"] .quick-action:hover,
+html[data-theme="dark"] .notification-row:hover {
+  background: var(--theme-surface-alt) !important;
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] .site-nav-logout,
+html[data-theme="dark"] .site-nav-theme-toggle {
+  background: var(--theme-surface-alt);
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+}
+html[data-theme="dark"] .site-nav-role,
+html[data-theme="dark"] .site-nav-avatar,
+html[data-theme="dark"] .site-nav-profile.is-active .site-nav-avatar,
+html[data-theme="dark"] .site-nav-mobile-count {
+  background: var(--theme-surface-alt);
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+}
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select,
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-select {
+  background-color: var(--theme-surface-alt) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--theme-muted) !important;
+}
+html[data-theme="dark"] table,
+html[data-theme="dark"] .admin-table,
+html[data-theme="dark"] .table {
+  color: var(--theme-text) !important;
+  --bs-table-bg: var(--theme-surface);
+  --bs-table-color: var(--theme-text);
+  --bs-table-border-color: var(--theme-border);
+}
+html[data-theme="dark"] .text-muted,
+html[data-theme="dark"] small,
+html[data-theme="dark"] .site-nav-profile-name {
+  color: var(--theme-muted) !important;
+}
+html[data-theme="dark"] .shoe-landing {
+  background: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] .shoe-landing .shoe-light-section,
+html[data-theme="dark"] .shoe-landing .feature-card,
+html[data-theme="dark"] .shoe-landing .shoe-image-card,
+html[data-theme="dark"] .shoe-landing .inventory-visual {
+  background: var(--theme-surface) !important;
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] .shoe-landing .section-heading,
+html[data-theme="dark"] .shoe-landing .benefit h5,
+html[data-theme="dark"] .shoe-landing .shoe-light-section p {
+  color: var(--theme-text) !important;
+}
+html[data-theme="dark"] .shoe-landing .shoe-navbar,
+html[data-theme="dark"] .shoe-landing .shoe-hero,
+html[data-theme="dark"] .shoe-landing .shoe-dark-section,
+html[data-theme="dark"] .shoe-landing .shoe-cta,
+html[data-theme="dark"] .shoe-landing .shoe-footer,
+html[data-theme="dark"] .shoe-landing .shoe-login-wrap {
+  background: #100f0d !important;
+}
+.site-nav-theme-toggle {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--shoe-line);
+  border-radius: 999px;
+  background: var(--shoe-cream);
+  color: var(--shoe-dark);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.site-nav-theme-toggle:hover {
+  background: var(--shoe-tan);
+  border-color: var(--shoe-tan);
+  color: var(--shoe-dark);
+}
+@media (max-width: 860px) {
+  .site-nav-mobile-secondary .site-nav-theme-toggle { display: none; }
+}

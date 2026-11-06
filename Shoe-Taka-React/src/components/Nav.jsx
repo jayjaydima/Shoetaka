@@ -7,6 +7,7 @@ function Nav() {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [theme, setTheme] = useState(() => localStorage.getItem('shoe-taka-theme') || 'light')
   const { cartCount, unreadNotifications } = useCart()
   const { user, logout, mode, switchMode } = useUser()
 
@@ -15,6 +16,15 @@ function Nav() {
   useEffect(() => {
     setMenuOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('shoe-taka-theme', theme)
+  }, [theme])
+
+  function toggleTheme() {
+    setTheme((current) => current === 'dark' ? 'light' : 'dark')
+  }
 
   async function handleLogout() {
     await logout()
@@ -69,6 +79,10 @@ function Nav() {
         </div>
 
         <div className="site-nav-actions">
+          <button type="button" className="site-nav-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+            <i className={`bi ${theme === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} aria-hidden="true"></i>
+            <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
           <span className={`site-nav-role ${mode === 'seller' ? 'is-seller' : ''}`}>
             <span className="site-nav-role-dot"></span>
             {mode === 'seller' ? 'Seller' : 'Customer'}
@@ -132,6 +146,7 @@ function Nav() {
           )}
         </div>
         <div className="site-nav-mobile-secondary">
+          <button type="button" onClick={toggleTheme}><i className={`bi ${theme === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} />{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
           <Link to="/notifications"><i className="bi bi-bell" />Notifications {unreadNotifications > 0 && <span className="site-nav-mobile-count">{unreadNotifications}</span>}</Link>
           <Link to="/profile"><i className="bi bi-person-circle" />My Profile</Link>
           <button type="button" onClick={handleLogout}><i className="bi bi-box-arrow-right" />Log out</button>
