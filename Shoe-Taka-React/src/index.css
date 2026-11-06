@@ -1181,3 +1181,163 @@ footer {
   letter-spacing: -0.04em;
   color: var(--ink);
 }
+
+
+/* =========================================================
+   SHOE TAKA GLOBAL THEME — TAN / CREAM / WHITE
+   Shared by landing, store, customer, seller and admin screens.
+   ========================================================= */
+:root {
+  --shoe-tan: #c8a27a;
+  --shoe-dark-tan: #a9825c;
+  --shoe-white: #fff;
+  --shoe-cream: #faf7f2;
+  --shoe-dark: #24211d;
+  --shoe-line: #e6ddd2;
+
+  /* Backward-compatible tokens used throughout the existing UI. */
+  --ink: var(--shoe-dark);
+  --paper: var(--shoe-white);
+  --stone: var(--shoe-cream);
+  --line: var(--shoe-line);
+  --accent: var(--shoe-tan);
+
+  color-scheme: light;
+}
+
+html, body, #root {
+  min-height: 100%;
+  background: var(--shoe-cream);
+  color: var(--shoe-dark);
+}
+
+body {
+  background: var(--shoe-cream);
+  color: var(--shoe-dark);
+}
+
+a { color: var(--shoe-dark-tan); }
+a:hover { color: var(--shoe-dark); }
+
+::selection {
+  background: rgba(200, 162, 122, .28);
+  color: var(--shoe-dark);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(200, 162, 122, .55);
+  outline-offset: 2px;
+}
+
+/* Shared navigation */
+.nav {
+  background: var(--shoe-white);
+  border-bottom: 1px solid var(--shoe-line);
+}
+.nav-logo, .nav-btn { color: var(--shoe-dark); }
+.dot, .cart-count, .notification-badge, .notification-dot {
+  background: var(--shoe-tan);
+}
+.nav-btn:hover, .nav-avatar:hover, .quick-action:hover {
+  background: var(--shoe-cream);
+}
+.nav-btn.active-view, .mode-switch button.active, .profile-mode-tag {
+  background: var(--shoe-dark);
+  color: var(--shoe-white);
+}
+.nav-out {
+  background: var(--shoe-tan);
+  color: var(--shoe-white);
+}
+.nav-out:hover { background: var(--shoe-dark-tan); }
+.cart-pill, .nav-avatar, .mode-switch, .mode-switch button,
+.nav-btn, .brand-filter, .product-size select, .qty-btn {
+  border-color: var(--shoe-line);
+}
+
+/* Primary actions and interactive controls */
+.btn-primary, .sell-now-btn, .admin-page .shoe-btn-yellow {
+  background: var(--shoe-tan);
+  border-color: var(--shoe-tan);
+  color: var(--shoe-white);
+}
+.btn-primary:hover, .sell-now-btn:hover,
+.admin-page .shoe-btn-yellow:hover {
+  background: var(--shoe-dark-tan);
+  border-color: var(--shoe-dark-tan);
+  color: var(--shoe-white);
+}
+.btn-ghost, .brand-filter, .btn-outline-dark, .btn-outline-secondary {
+  border-color: var(--shoe-tan);
+  color: var(--shoe-dark);
+}
+.btn-ghost:hover, .brand-filter:hover, .brand-filter.active {
+  background: var(--shoe-tan);
+  border-color: var(--shoe-tan);
+  color: var(--shoe-white);
+}
+button:disabled, .btn:disabled {
+  opacity: .55;
+}
+
+/* Store, cart, dashboard and admin surfaces */
+.product-card, .project-card, .market-stat-card, .market-panel,
+.profile-summary, .profile-form-card, .product-editor,
+.seller-product-card, .notification-panel, .order-card,
+.admin-stat-card, .admin-form-card, .admin-table-wrap,
+.admin-order-card, .login-card {
+  background: var(--shoe-white);
+  border-color: var(--shoe-line);
+}
+.store-wrap { color: var(--shoe-dark); }
+.store-head h1, .market-head h1, .admin-page-title,
+.admin-section-title, .admin-stat-value, .admin-section-title,
+.section-title, .ulo h1 {
+  color: var(--shoe-dark);
+}
+.empty-state, .seller-empty, .admin-empty {
+  background: var(--shoe-white);
+  border-color: var(--shoe-line);
+}
+.cart-row, .market-list-row, .order-card-head, .order-item-row,
+.order-card-footer, .seller-mini-stat {
+  border-color: var(--shoe-line);
+}
+.cart-row img, .admin-thumb, .admin-order-head,
+.product-upload-preview, .seller-product-card > img,
+.order-item-row img {
+  background: var(--shoe-cream);
+}
+.market-stat-card > i, .market-list-icon, .profile-avatar-large,
+.quick-action, .market-status, .seller-setup-banner,
+.notification-icon, .order-customer-box {
+  border-color: var(--shoe-line);
+}
+.quick-action { color: var(--shoe-dark); }
+.quick-action:hover { color: var(--shoe-dark); }
+.market-panel-head a { color: var(--shoe-dark-tan); }
+.market-kicker, .admin-page-kicker, .brand-code { color: var(--shoe-dark-tan); }
+.profile-mode-tag.seller {
+  background: var(--shoe-cream);
+  color: var(--shoe-dark);
+  border-color: var(--shoe-line);
+}
+
+/* Forms, tables and Bootstrap controls */
+.form-control, .form-select, input, select, textarea {
+  border-color: var(--shoe-line);
+}
+.form-control:focus, .form-select:focus, input:focus, select:focus, textarea:focus {
+  border-color: var(--shoe-tan);
+  box-shadow: 0 0 0 .2rem rgba(200, 162, 122, .2);
+}
+.admin-table th { border-color: var(--shoe-line); color: var(--shoe-dark-tan); }
+.admin-table td { border-color: var(--shoe-line); }
+.admin-order-head { background: var(--shoe-cream); border-color: var(--shoe-line); }
+.admin-badge { border-color: var(--shoe-line); background: var(--shoe-cream); color: var(--shoe-dark); }
+
+/* Keep status colors meaningful while harmonizing neutral UI surfaces. */
+.badge.bg-warning, .alert-warning {
+  background-color: #f1e4d3 !important;
+  color: var(--shoe-dark) !important;
+}
