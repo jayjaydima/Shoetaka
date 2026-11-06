@@ -5,8 +5,15 @@ const mysql = require('mysql2/promise');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.use(express.json({ limit: '10mb' }));
 app.use(cors());
+
+// Log API requests so failed requests can be traced in the backend terminal.
+app.use('/api', (req, res, next) => {
+    console.log(`API ${req.method} ${req.originalUrl}`);
+    next();
+});
+
+app.use(express.json({ limit: '25mb' }));
 
 // Connect to the existing XAMPP database
 const db = mysql.createPool({
@@ -98,6 +105,26 @@ app.get('/api/health', async (req, res) => {
     } catch (error) {
         res.status(500).json({ status: 'error', database: 'disconnected', message: error.message });
     }
+});
+
+// Return a readable error when a request contains invalid JSON.
+app.use((error, req, res, next) => {
+    if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+        console.error('Invalid JSON request:', error.message);
+        return res.status(400).json({
+            message: 'Invalid JSON sent by the frontend. Please check the request body.',
+            details: error.message
+        });
+    }
+
+    if (error) {
+        console.error('Server error:', error.message);
+        return res.status(error.status || 500).json({
+            message: error.message || 'Internal server error.'
+        });
+    }
+
+    next();
 });
 
 app.listen(PORT, () => {
