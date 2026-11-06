@@ -44,7 +44,8 @@ function Cart() {
           address: buyerAddress.trim(),
           contactNumber: buyerContact.trim(),
         },
-        paymentMethod
+        paymentMethod,
+        { [selectedCartKey]: selectedQty }
       )
       setCheckoutModalOpen(false)
       setSelectedCartKey(null)
