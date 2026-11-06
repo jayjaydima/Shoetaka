@@ -64,7 +64,7 @@ export function ProductsProvider({ children }) {
     writeJSON(STORAGE_KEYS.products, normalized)
   }
 
-  function addProduct(data) {
+  async function addProduct(data) {
     const sellerId = data.sellerId || (isAdmin ? null : firebaseUser?.uid || null)
     const product = normalizeProduct(
       {
@@ -77,8 +77,20 @@ export function ProductsProvider({ children }) {
       },
       createId('product')
     )
-    saveProducts([...products, product])
-    return product
+    // Send the seller submission to Express before updating the local UI.
+    const response = await fetch('/api/product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(result.message || 'Hindi ma-save ang product sa server.')
+    }
+
+    const savedProduct = normalizeProduct(result, product.id)
+    saveProducts([...products, savedProduct])
+    return savedProduct
   }
 
   function updateProduct(id, updates) {
