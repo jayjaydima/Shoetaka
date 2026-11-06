@@ -177,10 +177,10 @@ export function CartProvider({ children }) {
     setCart({})
   }
 
-  async function placeOrder(buyer, paymentMethod) {
+  async function placeOrder(buyer, paymentMethod, selectedCart = cart) {
     if (!uid) throw new Error('Please log in to place an order.')
 
-    const items = Object.entries(cart)
+    const items = Object.entries(selectedCart)
       .map(([cartKey, qty]) => {
         const { productId, size } = parseCartKey(cartKey)
         const product = products.find((p) => p.id === productId)
@@ -263,7 +263,11 @@ export function CartProvider({ children }) {
     })
 
     refreshNotifications()
-    clearCart()
+    setCart((currentCart) => {
+      const remaining = { ...currentCart }
+      Object.keys(selectedCart).forEach((cartKey) => delete remaining[cartKey])
+      return remaining
+    })
     return order
   }
 

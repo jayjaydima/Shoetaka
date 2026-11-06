@@ -2164,3 +2164,20 @@ html[data-theme="dark"] .cart-payment-option { background:var(--theme-surface-al
   .checkout-modal-actions .cart-checkout-button { width: 100%; }
   .checkout-modal-actions .cart-continue-btn { width: 100%; }
 }
+
+
+/* Per-item checkout action inside each cart product card */
+.cart-item-order-button {
+  margin-top: 1px;
+  padding: 8px 13px;
+  border-radius: 9px;
+  background: #a9825c;
+  border-color: #a9825c;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.cart-item-order-button:hover { background: #8f6b49; border-color: #8f6b49; }
+@media(max-width:620px) {
+  .cart-product-actions .cart-item-order-button { margin-left: auto; }
+}
