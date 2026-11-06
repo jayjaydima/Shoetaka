@@ -8,6 +8,9 @@ import {
 } from '../data/storage.js'
 import { useUser } from './UserContext.jsx'
 
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const PRODUCT_API_URL = `${API_URL}/api/product`
+
 const ProductsContext = createContext(null)
 
 function normalizeProduct(product, fallbackId) {
@@ -61,7 +64,7 @@ export function ProductsProvider({ children }) {
 
     async function syncServerProducts() {
       try {
-        const response = await fetch('/api/product')
+        const response = await fetch(PRODUCT_API_URL)
         if (!response.ok) throw new Error('Hindi makuha ang products mula sa server.')
         const serverItems = await response.json()
         if (!Array.isArray(serverItems) || !active) return
@@ -120,7 +123,7 @@ export function ProductsProvider({ children }) {
       createId('product')
     )
 
-    const response = await fetch('/api/product', {
+    const response = await fetch(PRODUCT_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -176,7 +179,7 @@ export function ProductsProvider({ children }) {
     })
 
     if (Number.isFinite(Number(id))) {
-      const response = await fetch(`/api/product/${encodeURIComponent(id)}`, {
+      const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,7 +230,7 @@ export function ProductsProvider({ children }) {
     }
 
     if (Number.isFinite(Number(id))) {
-      const response = await fetch(`/api/product/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, { method: 'DELETE' })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.message || 'Hindi ma-delete ang product sa server.')
     }
