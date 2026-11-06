@@ -6,16 +6,14 @@ import { useUser } from '../context/UserContext.jsx'
 import { useProducts } from '../context/ProductsContext.jsx'
 import Nav from '../components/Nav.jsx'
 
-
 function Cart() {
   const { cart, changeQuantity, removeFromCart, cartTotal, placeOrder } = useCart()
   const { user } = useUser()
   const { products: PRODUCTS } = useProducts()
   const navigate = useNavigate()
   const entries = Object.entries(cart)
+  const itemCount = entries.reduce((sum, [, qty]) => sum + qty, 0)
 
-  // Pre-fill delivery details from the saved profile (see Profile.jsx) so
-  // returning users don't have to retype them every checkout.
   const [buyerName, setBuyerName] = useState(user?.name || '')
   const [buyerAddress, setBuyerAddress] = useState(user?.address || '')
   const [buyerContact, setBuyerContact] = useState(user?.phone || '')
@@ -31,7 +29,6 @@ function Cart() {
     setCheckoutError('')
     setPlacing(true)
     try {
-      // Saves the order to Firestore
       await placeOrder(
         {
           name: buyerName.trim(),
@@ -51,105 +48,126 @@ function Cart() {
   return (
     <div className="app active">
       <Nav />
-
-      <main className="store-wrap">
-        <div className="store-head">
-          <h1>Your Cart</h1>
-        </div>
+      <main className="store-wrap cart-page-wrap">
+        <header className="cart-page-heading">
+          <div>
+            <p className="brand-code">SHOE TAKA MARKETPLACE</p>
+            <h1>Your Shopping Cart</h1>
+            <p>Review your pairs and delivery details before checkout.</p>
+          </div>
+          <button className="cart-continue-btn" type="button" onClick={() => navigate('/store')}>
+            ← Continue shopping
+          </button>
+        </header>
 
         {entries.length === 0 ? (
-          <div className="empty-state">Your cart is empty. Go add some shoes!</div>
+          <section className="cart-empty-panel">
+            <div className="cart-empty-icon">🛍️</div>
+            <h2>Your cart is waiting for a fresh pair.</h2>
+            <p>Browse the store and add your favorite shoes here.</p>
+            <button className="btn-primary" type="button" onClick={() => navigate('/store')}>Explore the store</button>
+          </section>
         ) : (
-          <>
-            {entries.map(([cartKey, qty]) => {
-              const { productId, size } = parseCartKey(cartKey)
-              const p = PRODUCTS.find((prod) => prod.id === productId)
-              if (!p) return null
-              return (
-                <div className="cart-row" key={cartKey}>
-                  <img src={p.image} alt={p.name} />
-                  <div className="flex-grow-1">
-                    <div className="fw-bold">{p.name}</div>
-                    <div className="brand-code">{p.brand} · Size {size} · {money(p.priceValue)} each</div>
-                    <div className="d-flex align-items-center gap-2 mt-2">
-                      <button className="qty-btn" onClick={() => changeQuantity(cartKey, -1)}>−</button>
-                      <span>{qty}</span>
-                      <button className="qty-btn" onClick={() => changeQuantity(cartKey, 1)}>+</button>
-                    </div>
-                  </div>
-                  <div className="text-end">
-                    <div className="fw-bold">{money(p.priceValue * qty)}</div>
-                    <button className="btn btn-link btn-sm text-danger p-0 mt-1" onClick={() => removeFromCart(cartKey)}>
-                      Remove
-                    </button>
-                  </div>
+          <div className="cart-layout">
+            <section className="cart-items-column">
+              <div className="cart-section-heading">
+                <div>
+                  <h2>Cart items</h2>
+                  <span>{itemCount} {itemCount === 1 ? 'item' : 'items'} selected</span>
                 </div>
-              )
-            })}
-
-            <div className="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
-              <span className="fs-5 fw-bold">Total</span>
-              <span className="fs-5 fw-bold">{money(cartTotal)}</span>
-            </div>
-
-            <div className="mt-4 pt-3 border-top">
-              <h2 className="section-title h6 mb-3">Delivery Details</h2>
-              <div className="mb-2">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Full name"
-                  value={buyerName}
-                  onChange={(e) => setBuyerName(e.target.value)}
-                />
+                <span className="cart-secure-note">Ready for checkout</span>
               </div>
-              <div className="mb-2">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Delivery address"
-                  value={buyerAddress}
-                  onChange={(e) => setBuyerAddress(e.target.value)}
-                />
-              </div>
-              <div className="mb-2">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Contact number"
-                  value={buyerContact}
-                  onChange={(e) => setBuyerContact(e.target.value)}
-                />
-              </div>
-              {checkoutError && <div className="text-danger small mb-2">{checkoutError}</div>}
-            </div>
 
-            <div className="mt-3 pt-3 border-top">
-              <h2 className="section-title h6 mb-3">Mode of Payment</h2>
-              <div className="d-flex gap-4 flex-wrap">
-                {['GCash', 'Maya', 'COD'].map((method) => (
-                  <label key={method} className="d-flex align-items-center gap-2">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value={method}
-                      checked={paymentMethod === method}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    />
-                    {method}
-                  </label>
-                ))}
+              <div className="cart-items-list">
+                {entries.map(([cartKey, qty]) => {
+                  const { productId, size } = parseCartKey(cartKey)
+                  const p = PRODUCTS.find((prod) => prod.id === productId)
+                  if (!p) return null
+                  return (
+                    <article className="cart-product-item" key={cartKey}>
+                      <div className="cart-product-image">
+                        <img src={p.image} alt={p.name} />
+                      </div>
+                      <div className="cart-product-info">
+                        <span className="cart-product-brand">{p.brand}</span>
+                        <h3>{p.name}</h3>
+                        <span className="cart-product-size">Shoe size: <strong>{size}</strong></span>
+                        <strong className="cart-product-unit-price">{money(p.priceValue)} <small>/ pair</small></strong>
+                      </div>
+                      <div className="cart-product-actions">
+                        <div className="cart-quantity-control" aria-label={`Quantity for ${p.name}`}>
+                          <button type="button" aria-label="Decrease quantity" onClick={() => changeQuantity(cartKey, -1)} disabled={qty <= 1}>−</button>
+                          <span>{qty}</span>
+                          <button type="button" aria-label="Increase quantity" onClick={() => changeQuantity(cartKey, 1)} disabled={qty >= p.stock}>+</button>
+                        </div>
+                        <strong className="cart-line-total">{money(p.priceValue * qty)}</strong>
+                        <button className="cart-remove-btn" type="button" onClick={() => removeFromCart(cartKey)}>Remove item</button>
+                      </div>
+                    </article>
+                  )
+                })}
               </div>
-            </div>
+            </section>
 
-            <button
-              className="btn-primary w-100 mt-3"
-              onClick={handleCheckout}
-              disabled={placing}
-            >
-              {placing ? 'Placing order...' : 'Checkout'}
-            </button>
-          </>
+            <aside className="cart-checkout-column">
+              <section className="cart-summary-card">
+                <div className="cart-summary-heading">
+                  <h2>Order summary</h2>
+                  <span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
+                </div>
+                <div className="cart-summary-line">
+                  <span>Subtotal</span>
+                  <strong>{money(cartTotal)}</strong>
+                </div>
+                <div className="cart-summary-line">
+                  <span>Shipping</span>
+                  <span className="cart-shipping-note">Calculated after order</span>
+                </div>
+                <div className="cart-summary-total">
+                  <span>Estimated total</span>
+                  <strong>{money(cartTotal)}</strong>
+                </div>
+                <p className="cart-summary-caption">Shipping fees, if applicable, will be confirmed with your order.</p>
+              </section>
+
+              <section className="cart-checkout-card">
+                <div className="cart-checkout-title">
+                  <span>01</span>
+                  <div><h2>Delivery details</h2><p>Where should we send your shoes?</p></div>
+                </div>
+                <div className="cart-form-field">
+                  <label htmlFor="cart-buyer-name">Full name</label>
+                  <input id="cart-buyer-name" type="text" placeholder="Enter your full name" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
+                </div>
+                <div className="cart-form-field">
+                  <label htmlFor="cart-buyer-address">Delivery address</label>
+                  <textarea id="cart-buyer-address" rows="3" placeholder="House number, street, barangay, city" value={buyerAddress} onChange={(e) => setBuyerAddress(e.target.value)} />
+                </div>
+                <div className="cart-form-field">
+                  <label htmlFor="cart-buyer-contact">Contact number</label>
+                  <input id="cart-buyer-contact" type="tel" placeholder="09XX XXX XXXX" value={buyerContact} onChange={(e) => setBuyerContact(e.target.value)} />
+                </div>
+
+                <div className="cart-checkout-title cart-payment-title">
+                  <span>02</span>
+                  <div><h2>Payment method</h2><p>Choose how you want to pay.</p></div>
+                </div>
+                <div className="cart-payment-options">
+                  {['GCash', 'Maya', 'COD'].map((method) => (
+                    <label key={method} className={`cart-payment-option ${paymentMethod === method ? 'selected' : ''}`}>
+                      <input type="radio" name="paymentMethod" value={method} checked={paymentMethod === method} onChange={(e) => setPaymentMethod(e.target.value)} />
+                      <span>{method === 'COD' ? 'Cash on Delivery' : method}</span>
+                    </label>
+                  ))}
+                </div>
+                {checkoutError && <div className="cart-checkout-error" role="alert">{checkoutError}</div>}
+                <button className="btn-primary cart-checkout-button" type="button" onClick={handleCheckout} disabled={placing}>
+                  {placing ? 'Placing order...' : 'Place order · ' + money(cartTotal)}
+                </button>
+                <p className="cart-checkout-footnote">Please review your items and delivery information before placing your order.</p>
+              </section>
+            </aside>
+          </div>
         )}
       </main>
     </div>
