@@ -43,7 +43,7 @@ let products = [
     }
 ];
 
-let nextID = 5;
+let nextID = Math.max(0, ...products.map((item) => Number(item.id) || 0)) + 1;
 
 app.get("/api/product", (req, res) => {
     res.json(products);
@@ -51,12 +51,20 @@ app.get("/api/product", (req, res) => {
 
 app.post("/api/product", (req, res) => {
     const newProduct = {
+        ...req.body,
         id: nextID,
-        product: req.body.product,
-        buy: req.body.buy,
-        sell: req.body.sell,
-        stock: req.body.stock,
-        image: req.body.image || ""
+        product: String(req.body.product || "").trim(),
+        buy: String(req.body.buy ?? "0"),
+        sell: String(req.body.sell ?? "0").trim(),
+        stock: String(req.body.stock ?? "0"),
+        image: req.body.image || "",
+        brand: String(req.body.brand || "").trim().toUpperCase(),
+        code: String(req.body.code || "").trim().toUpperCase(),
+        size: Array.isArray(req.body.size) ? req.body.size.map(String) : ["7", "8", "9", "10"],
+        description: String(req.body.description || ""),
+        sellerId: req.body.sellerId || null,
+        status: req.body.status || (req.body.sellerId ? "pending" : "approved"),
+        rejectionReason: req.body.rejectionReason || ""
     };
 
     nextID++;
@@ -68,10 +76,10 @@ app.post("/api/product", (req, res) => {
 });
 
 app.put("/api/product/:id", (req, res) => {
-    const id = Number(req.params.id);
+    const id = String(req.params.id);
 
     const editID = products.findIndex(
-        (item) => item.id === id
+        (item) => String(item.id) === id
     );
 
     if (editID === -1) {
@@ -79,15 +87,23 @@ app.put("/api/product/:id", (req, res) => {
             message: "Product not found"
         });
     }
-   const oldProduct = products[editID];
+    const oldProduct = products[editID];
     products[editID] = {
-        id: id,
-        product: req.body.product,
-        buy: req.body.buy,
-        sell: req.body.sell,
-        stock: req.body.stock,
-        image: req.body.image || ""
-
+        ...oldProduct,
+        ...req.body,
+        id: oldProduct.id,
+        product: String(req.body.product ?? oldProduct.product).trim(),
+        buy: String(req.body.buy ?? oldProduct.buy),
+        sell: String(req.body.sell ?? oldProduct.sell).trim(),
+        stock: String(req.body.stock ?? oldProduct.stock),
+        image: req.body.image ?? oldProduct.image ?? "",
+        brand: String(req.body.brand ?? oldProduct.brand ?? "").trim().toUpperCase(),
+        code: String(req.body.code ?? oldProduct.code ?? "").trim().toUpperCase(),
+        size: Array.isArray(req.body.size) ? req.body.size.map(String) : oldProduct.size || ["7", "8", "9", "10"],
+        description: String(req.body.description ?? oldProduct.description ?? ""),
+        sellerId: req.body.sellerId ?? oldProduct.sellerId ?? null,
+        status: req.body.status ?? oldProduct.status ?? "approved",
+        rejectionReason: req.body.rejectionReason ?? oldProduct.rejectionReason ?? ""
     };
 
     console.log("\n[UPDATED]", { ...products[editID], image: products[editID].image ? "(has image)" : "" });
@@ -96,10 +112,10 @@ app.put("/api/product/:id", (req, res) => {
 });
 
 app.delete("/api/product/:id", (req, res) => {
-    const id = Number(req.params.id);
+    const id = String(req.params.id);
 
     const deleteID = products.findIndex(
-        (item) => item.id === id
+        (item) => String(item.id) === id
     );
 
     if (deleteID === -1) {
