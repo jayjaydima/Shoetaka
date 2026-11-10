@@ -2,15 +2,22 @@
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
 
-// 2. Create the server
+// 2. Initialize Firebase Admin
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
+// 3. Create the server
 const app = express();
 const PORT = 8080;
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 
-// 3. Connect to MySQL
+// 4. Connect to MySQL
 const db = mysql.createPool({
     host: 'localhost',
     user: 'root',
@@ -28,7 +35,7 @@ db.getConnection()
         console.log('Database Error:', error.message);
     });
 
-// 4. GET - Get all products
+// 5. GET - Get all products
 app.get('/api/product', async (req, res) => {
     try {
         const [products] = await db.query('SELECT * FROM products');
@@ -53,7 +60,7 @@ app.get('/api/product', async (req, res) => {
     }
 });
 
-// 5. POST - Add a product
+// 6. POST - Add a product
 app.post('/api/product', async (req, res) => {
     try {
         const data = req.body;
@@ -101,7 +108,7 @@ app.post('/api/product', async (req, res) => {
     }
 });
 
-// 6. PUT - Update a product
+// 7. PUT - Update a product
 app.put('/api/product/:id', async (req, res) => {
     try {
         const data = req.body;
@@ -135,7 +142,7 @@ app.put('/api/product/:id', async (req, res) => {
     }
 });
 
-// 7. DELETE - Delete a product
+// 8. DELETE - Delete a product
 app.delete('/api/product/:id', async (req, res) => {
     try {
         await db.query(
@@ -149,7 +156,7 @@ app.delete('/api/product/:id', async (req, res) => {
     }
 });
 
-// 8. Start the server
+// 9. Start the server
 app.listen(PORT, () => {
     console.log('Server running on port ' + PORT);
 });
