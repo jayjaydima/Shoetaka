@@ -1,13 +1,16 @@
+// 1. Import packages
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
 
+// 2. Create the server
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = 8080;
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 
+// 3. Connect to MySQL
 const db = mysql.createPool({
     host: 'localhost',
     user: 'root',
@@ -15,131 +18,138 @@ const db = mysql.createPool({
     database: 'shoe_inventory_db'
 });
 
+// Check database connection
 db.getConnection()
     .then(connection => {
         console.log('Database Connected');
         connection.release();
     })
-    .catch(error => console.log('Database error:', error.message));
+    .catch(error => {
+        console.log('Database Error:', error.message);
+    });
 
-// Convert shoe sizes between the React array and MySQL text column.
-const saveSizes = sizes => Array.isArray(sizes) ? sizes.join(', ') : (sizes || '');
-const readSizes = sizes => sizes ? sizes.split(',').map(size => size.trim()).filter(Boolean) : ['7', '8', '9', '10'];
-
-// GET all products
+// 4. GET - Get all products
 app.get('/api/product', async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT * FROM products');
-        res.json(rows.map(row => ({
-            id: row.product_id,
-            product: row.product_name,
-            sell: String(row.sell_price || 0),
-            stock: String(row.stock || 0),
-            image: row.image || '',
-            sellerId: row.seller_id,
-            brand: row.brand || '',
-            code: row.brand_code || '',
-            size: readSizes(row.sizes),
-            description: row.description || '',
-            status: row.status || 'approved'
-        })));
+        const [products] = await db.query('SELECT * FROM products');
+
+        const result = products.map(item => ({
+            id: item.product_id,
+            product: item.product_name,
+            sell: String(item.sell_price || 0),
+            stock: String(item.stock || 0),
+            image: item.image || '',
+            sellerId: item.seller_id,
+            brand: item.brand || '',
+            code: item.brand_code || '',
+            size: item.sizes ? item.sizes.split(',').map(size => size.trim()) : ['7', '8', '9', '10'],
+            description: item.description || '',
+            status: item.status || 'approved'
+        }));
+
+        res.json(result);
     } catch (error) {
-        console.error('GET products:', error.message);
         res.status(500).json({ message: error.message });
     }
 });
 
-// ADD product
+// 5. POST - Add a product
 app.post('/api/product', async (req, res) => {
     try {
         const data = req.body;
-        const product = String(data.product || data.name || data.productName || '').trim();
-        const sell = Number(data.sell || data.priceValue || data.price || 0);
-        const stock = Number(data.stock || 0);
+
+        const sizes = Array.isArray(data.size) ? data.size.join(', ') : '';
         const sellerId = data.sellerId || null;
         const status = data.status || (sellerId ? 'pending' : 'approved');
 
-        if (!product || !Number.isFinite(sell) || sell < 0 || !Number.isInteger(stock) || stock < 0) {
-            return res.status(400).json({ message: 'Check product name, selling price, and stock.' });
-        }
+        const sql = `
+            INSERT INTO products
+            (seller_id, product_name, brand, brand_code, sell_price, stock, sizes, image, description, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
 
         const values = [
-            sellerId, product, data.brand || '', data.code || '',
-            sell, stock, saveSizes(data.size || data.sizes),
-            data.image || '', data.description || '', status
+            sellerId,
+            data.product,
+            data.brand || '',
+            data.code || '',
+            Number(data.sell || 0),
+            Number(data.stock || 0),
+            sizes,
+            data.image || '',
+            data.description || '',
+            status
         ];
 
-        const [result] = await db.query(
-            'INSERT INTO products (seller_id, product_name, brand, brand_code, sell_price, stock, sizes, image, description, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            values
-        );
+        const [result] = await db.query(sql, values);
 
         res.status(201).json({
             id: result.insertId,
-            product,
-            sell: String(sell),
-            stock: String(stock),
+            product: data.product,
+            sell: String(data.sell || 0),
+            stock: String(data.stock || 0),
             image: data.image || '',
             sellerId,
             brand: data.brand || '',
             code: data.code || '',
-            size: readSizes(saveSizes(data.size || data.sizes)),
+            size: Array.isArray(data.size) ? data.size : ['7', '8', '9', '10'],
             description: data.description || '',
             status
         });
     } catch (error) {
-        console.error('POST product:', error.message);
-        res.status(500).json({ message: 'Hindi na-save ang product sa MySQL.', details: error.message });
+        res.status(500).json({ message: error.message });
     }
 });
 
-// UPDATE product
+// 6. PUT - Update a product
 app.put('/api/product/:id', async (req, res) => {
     try {
         const data = req.body;
-        const product = String(data.product || data.name || '').trim();
-        const sell = Number(data.sell || data.priceValue || data.price || 0);
-        const stock = Number(data.stock || 0);
+        const sizes = Array.isArray(data.size) ? data.size.join(', ') : '';
 
-        if (!product || !Number.isFinite(sell) || sell < 0 || !Number.isInteger(stock) || stock < 0) {
-            return res.status(400).json({ message: 'Check product name, selling price, and stock.' });
-        }
+        const sql = `
+            UPDATE products SET
+            seller_id = ?, product_name = ?, brand = ?, brand_code = ?,
+            sell_price = ?, stock = ?, sizes = ?, image = ?, description = ?, status = ?
+            WHERE product_id = ?
+        `;
 
-        await db.query(
-            'UPDATE products SET seller_id = ?, product_name = ?, brand = ?, brand_code = ?, sell_price = ?, stock = ?, sizes = ?, image = ?, description = ?, status = ? WHERE product_id = ?',
-            [
-                data.sellerId || null, product, data.brand || '', data.code || '',
-                sell, stock, saveSizes(data.size || data.sizes), data.image || '',
-                data.description || '', data.status || 'pending', req.params.id
-            ]
-        );
+        const values = [
+            data.sellerId || null,
+            data.product,
+            data.brand || '',
+            data.code || '',
+            Number(data.sell || 0),
+            Number(data.stock || 0),
+            sizes,
+            data.image || '',
+            data.description || '',
+            data.status || 'pending',
+            req.params.id
+        ];
 
+        await db.query(sql, values);
         res.json({ message: 'Product Updated' });
     } catch (error) {
-        console.error('PUT product:', error.message);
         res.status(500).json({ message: error.message });
     }
 });
 
-// DELETE product
+// 7. DELETE - Delete a product
 app.delete('/api/product/:id', async (req, res) => {
     try {
-        await db.query('DELETE FROM products WHERE product_id = ?', [req.params.id]);
+        await db.query(
+            'DELETE FROM products WHERE product_id = ?',
+            [req.params.id]
+        );
+
         res.json({ message: 'Product Deleted' });
     } catch (error) {
-        console.error('DELETE product:', error.message);
         res.status(500).json({ message: error.message });
     }
 });
 
-// Check MySQL connection
-app.get('/api/health', async (req, res) => {
-    try {
-        await db.query('SELECT 1');
-        res.json({ status: 'ok', database: 'connected' });
-    } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
-    }
+// 8. Start the server
+app.listen(PORT, () => {
+    console.log('Server running on port ' + PORT);
 });
-
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
