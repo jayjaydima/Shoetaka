@@ -2,13 +2,15 @@
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 const serviceAccount = require('./serviceAccountKey.json');
 
-// 2. Initialize Firebase Admin
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+// 2. Initialize Firebase Admin (modular API)
+const firebaseApp = initializeApp({
+    credential: cert(serviceAccount)
 });
+const auth = getAuth(firebaseApp);
 
 // 3. Create the server
 const app = express();
