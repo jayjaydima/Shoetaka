@@ -132,7 +132,6 @@ export function ProductsProvider({ children }) {
         product: product.name,
         name: product.name,
         productName: product.name,
-        buy: String(data.buy ?? '0'),
         sell: String(product.priceValue),
         stock: String(product.stock),
         image: product.image,
@@ -188,7 +187,6 @@ export function ProductsProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product: updatedProduct.name,
-          buy: String(updates.buy ?? existing.buy ?? '0'),
           sell: String(updatedProduct.priceValue),
           stock: String(updatedProduct.stock),
           image: updatedProduct.image,
