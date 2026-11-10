@@ -34,97 +34,105 @@ db.getConnection()
 app.get('/api/product', async (req, res) => {
     try {
         const [products] = await db.query('SELECT * FROM products');
-
-        res.json(products.map(product => ({
-            id: Number(product.product_id),
-            product: product.product_name,
-            buy: String(product.buy_price ?? '0'),
-            sell: String(product.sell_price ?? '0'),
-            stock: String(product.stock ?? '0'),
-            image: product.image || '',
-            sellerId: product.seller_id || null,
-            brand: '',
-            code: '',
-            size: ['7', '8', '9', '10'],
-            description: '',
-            status: product.status || 'approved',
-            rejectionReason: ''
-        })));
+        res.json(products.map(product => {
+            let sizes = ['7', '8', '9', '10'];
+            try {
+                if (product.sizes) {
+                    const parsed = JSON.parse(product.sizes);
+                    sizes = Array.isArray(parsed) ? parsed.map(String) : String(product.sizes).split(',').map(v => v.trim()).filter(Boolean);
+                }
+            } catch {
+                sizes = String(product.sizes).split(',').map(v => v.trim()).filter(Boolean);
+            }
+            return {
+                id: Number(product.product_id),
+                product: product.product_name,
+                buy: String(product.buy_price ?? '0'),
+                sell: String(product.sell_price ?? '0'),
+                stock: String(product.stock ?? '0'),
+                image: product.image || '',
+                sellerId: product.seller_id || null,
+                brand: product.brand || '',
+                code: product.brand_code || '',
+                size: sizes,
+                description: product.description || '',
+                status: product.status || 'approved',
+                rejectionReason: ''
+            };
+        }));
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('GET /api/product MySQL error:', error.code || '', error.message);
+        res.status(500).json({ message: error.message, code: error.code || null });
     }
 });
 
 // ADD product
 app.post('/api/product', async (req, res) => {
     try {
-        // Accept both the current React field names and common form field aliases.
         const body = req.body || {};
         const productValue = body.product ?? body.name ?? body.productName ?? body.product_name ?? body.shoeName ?? body.title ?? body.productData?.name ?? '';
         const product = String(typeof productValue === 'object' && productValue !== null ? (productValue.name ?? '') : productValue).trim();
-        console.log('Add product fields received:', Object.keys(body));
-        const buy = Number(req.body.buy ?? req.body.buyPrice ?? 0);
-        const sell = Number(req.body.sell ?? req.body.priceValue ?? req.body.price ?? 0);
-        const stock = Number(req.body.stock ?? 0);
-        const image = String(req.body.image ?? '');
-        const sellerId = req.body.sellerId ? String(req.body.sellerId) : null;
-        const requestedStatus = req.body.status;
-        const status = ['pending', 'approved', 'rejected'].includes(requestedStatus)
-            ? requestedStatus
-            : (sellerId ? 'pending' : 'approved');
+        const buy = Number(body.buy ?? body.buyPrice ?? 0);
+        const sell = Number(body.sell ?? body.priceValue ?? body.price ?? 0);
+        const stock = Number(body.stock ?? 0);
+        const image = String(body.image ?? '');
+        const brand = String(body.brand ?? '').trim();
+        const brandCode = String(body.code ?? body.brand_code ?? '').trim();
+        const sizes = JSON.stringify(Array.isArray(body.size) ? body.size.map(String) : (body.size ? String(body.size).split(',').map(v => v.trim()).filter(Boolean) : []));
+        const description = String(body.description ?? '');
+        const sellerId = body.sellerId ? String(body.sellerId) : null;
+        const requestedStatus = body.status;
+        const status = ['pending', 'approved', 'rejected'].includes(requestedStatus) ? requestedStatus : (sellerId ? 'pending' : 'approved');
 
-        if (!product) {
-            return res.status(400).json({ message: 'Product name is required.' });
-        }
-        if (product.length > 100) {
-            return res.status(400).json({ message: 'Product name must be 100 characters or fewer.' });
-        }
-        if (!Number.isFinite(buy) || buy < 0 || !Number.isFinite(sell) || sell < 0) {
-            return res.status(400).json({ message: 'Buy and sell prices must be valid non-negative numbers.' });
-        }
-        if (!Number.isInteger(stock) || stock < 0) {
-            return res.status(400).json({ message: 'Stock must be a non-negative whole number.' });
-        }
+        if (!product) return res.status(400).json({ message: 'Product name is required.' });
+        if (product.length > 120) return res.status(400).json({ message: 'Product name must be 120 characters or fewer.' });
+        if (!Number.isFinite(buy) || buy < 0 || !Number.isFinite(sell) || sell < 0) return res.status(400).json({ message: 'Buy and sell prices must be valid non-negative numbers.' });
+        if (!Number.isInteger(stock) || stock < 0) return res.status(400).json({ message: 'Stock must be a non-negative whole number.' });
 
         const [result] = await db.query(
-            'INSERT INTO products (seller_id, product_name, buy_price, sell_price, stock, image, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [sellerId, product, buy, sell, stock, image, status]
+            'INSERT INTO products (seller_id, product_name, brand, brand_code, buy_price, sell_price, stock, sizes, image, description, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [sellerId, product, brand, brandCode, buy, sell, stock, sizes, image, description, status]
         );
-
         console.log('Product inserted into MySQL. product_id:', result.insertId);
         res.status(201).json({
-            id: result.insertId,
-            product,
-            buy: String(buy),
-            sell: String(sell),
-            stock: String(stock),
-            image,
-            sellerId,
-            status
+            id: result.insertId, product, buy: String(buy), sell: String(sell),
+            stock: String(stock), image, sellerId, brand, code: brandCode,
+            size: JSON.parse(sizes), description, status
         });
     } catch (error) {
         console.error('POST /api/product MySQL error:', error.code || '', error.message);
-        res.status(500).json({
-            message: 'Hindi na-save ang product sa MySQL.',
-            details: error.message,
-            code: error.code || null
-        });
+        res.status(500).json({ message: 'Hindi na-save ang product sa MySQL.', details: error.message, code: error.code || null });
     }
 });
 
 // UPDATE product
 app.put('/api/product/:id', async (req, res) => {
     try {
-        const { product, buy, sell, stock, image, sellerId, status } = req.body;
+        const body = req.body || {};
+        const product = String(body.product ?? body.name ?? body.productName ?? '').trim();
+        const buy = Number(body.buy ?? 0);
+        const sell = Number(body.sell ?? body.priceValue ?? 0);
+        const stock = Number(body.stock ?? 0);
+        const image = String(body.image ?? '');
+        const brand = String(body.brand ?? '').trim();
+        const brandCode = String(body.code ?? body.brand_code ?? '').trim();
+        const sizes = JSON.stringify(Array.isArray(body.size) ? body.size.map(String) : (body.size ? String(body.size).split(',').map(v => v.trim()).filter(Boolean) : []));
+        const description = String(body.description ?? '');
+        const sellerId = body.sellerId || null;
+        const status = ['pending', 'approved', 'rejected'].includes(body.status) ? body.status : 'pending';
+
+        if (!product) return res.status(400).json({ message: 'Product name is required.' });
+        if (!Number.isFinite(buy) || buy < 0 || !Number.isFinite(sell) || sell < 0) return res.status(400).json({ message: 'Prices must be valid non-negative numbers.' });
+        if (!Number.isInteger(stock) || stock < 0) return res.status(400).json({ message: 'Stock must be a non-negative whole number.' });
 
         await db.query(
-            'UPDATE products SET seller_id = ?, product_name = ?, buy_price = ?, sell_price = ?, stock = ?, image = ?, status = ? WHERE product_id = ?',
-            [sellerId || null, product, buy || 0, sell || 0, stock || 0, image || '', status || 'pending', req.params.id]
+            'UPDATE products SET seller_id = ?, product_name = ?, brand = ?, brand_code = ?, buy_price = ?, sell_price = ?, stock = ?, sizes = ?, image = ?, description = ?, status = ? WHERE product_id = ?',
+            [sellerId, product, brand, brandCode, buy, sell, stock, sizes, image, description, status, req.params.id]
         );
-
         res.json({ message: 'Product Updated' });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('PUT /api/product MySQL error:', error.code || '', error.message);
+        res.status(500).json({ message: error.message, code: error.code || null });
     }
 });
 
