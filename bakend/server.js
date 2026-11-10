@@ -6,10 +6,6 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
-app.use('/api', (req, res, next) => {
-    console.log(`API ${req.method} ${req.originalUrl}`);
-    next();
-});
 app.use(express.json({ limit: '25mb' }));
 
 const db = mysql.createPool({
@@ -24,128 +20,104 @@ db.getConnection()
         console.log('Database Connected');
         connection.release();
     })
-    .catch(error => console.log('Database Connection Failed:', error.message));
+    .catch(error => console.log('Database error:', error.message));
 
-const normalizeSizes = (value) => {
-    if (Array.isArray(value)) return value.map(size => String(size).trim()).filter(Boolean).join(', ');
-    return String(value ?? '').trim();
-};
-
-const parseSizes = (value) => {
-    const sizes = String(value ?? '').split(',').map(size => size.trim()).filter(Boolean);
-    return sizes.length ? sizes : ['7', '8', '9', '10'];
-};
+// Convert shoe sizes between the React array and MySQL text column.
+const saveSizes = sizes => Array.isArray(sizes) ? sizes.join(', ') : (sizes || '');
+const readSizes = sizes => sizes ? sizes.split(',').map(size => size.trim()).filter(Boolean) : ['7', '8', '9', '10'];
 
 // GET all products
 app.get('/api/product', async (req, res) => {
     try {
-        const [products] = await db.query('SELECT * FROM products');
-        res.json(products.map(product => ({
-            id: Number(product.product_id),
-            product: product.product_name,
-            sell: String(product.sell_price ?? '0'),
-            priceValue: Number(product.sell_price ?? 0),
-            stock: String(product.stock ?? '0'),
-            image: product.image || '',
-            sellerId: product.seller_id || null,
-            brand: product.brand || '',
-            code: product.brand_code || '',
-            size: parseSizes(product.sizes),
-            description: product.description || '',
-            status: product.status || 'approved',
-            rejectionReason: ''
+        const [rows] = await db.query('SELECT * FROM products');
+        res.json(rows.map(row => ({
+            id: row.product_id,
+            product: row.product_name,
+            sell: String(row.sell_price || 0),
+            stock: String(row.stock || 0),
+            image: row.image || '',
+            sellerId: row.seller_id,
+            brand: row.brand || '',
+            code: row.brand_code || '',
+            size: readSizes(row.sizes),
+            description: row.description || '',
+            status: row.status || 'approved'
         })));
     } catch (error) {
-        console.error('GET /api/product MySQL error:', error.code || '', error.message);
-        res.status(500).json({ message: error.message, code: error.code || null });
+        console.error('GET products:', error.message);
+        res.status(500).json({ message: error.message });
     }
 });
 
 // ADD product
 app.post('/api/product', async (req, res) => {
     try {
-        const body = req.body || {};
-        const productValue = body.product ?? body.name ?? body.productName ?? body.product_name ?? body.shoeName ?? body.title ?? body.productData?.name ?? '';
-        const product = String(typeof productValue === 'object' && productValue !== null ? (productValue.name ?? '') : productValue).trim();
-        const sell = Number(body.sell ?? body.priceValue ?? body.price ?? 0);
-        const stock = Number(body.stock ?? 0);
-        const image = String(body.image ?? '');
-        const sellerId = body.sellerId ? String(body.sellerId) : null;
-        const brand = String(body.brand ?? '');
-        const brandCode = String(body.code ?? body.brandCode ?? body.brand_code ?? '');
-        const sizes = normalizeSizes(body.size ?? body.sizes);
-        const description = String(body.description ?? '');
-        const requestedStatus = body.status;
-        const status = ['pending', 'approved', 'rejected'].includes(requestedStatus)
-            ? requestedStatus
-            : (sellerId ? 'pending' : 'approved');
+        const data = req.body;
+        const product = String(data.product || data.name || data.productName || '').trim();
+        const sell = Number(data.sell || data.priceValue || data.price || 0);
+        const stock = Number(data.stock || 0);
+        const sellerId = data.sellerId || null;
+        const status = data.status || (sellerId ? 'pending' : 'approved');
 
-        console.log('Add product fields received:', Object.keys(body));
+        if (!product || !Number.isFinite(sell) || sell < 0 || !Number.isInteger(stock) || stock < 0) {
+            return res.status(400).json({ message: 'Check product name, selling price, and stock.' });
+        }
 
-        if (!product) return res.status(400).json({ message: 'Product name is required.' });
-        if (product.length > 120) return res.status(400).json({ message: 'Product name must be 120 characters or fewer.' });
-        if (!Number.isFinite(sell) || sell < 0) return res.status(400).json({ message: 'Selling price must be a valid non-negative number.' });
-        if (!Number.isInteger(stock) || stock < 0) return res.status(400).json({ message: 'Stock must be a non-negative whole number.' });
+        const values = [
+            sellerId, product, data.brand || '', data.code || '',
+            sell, stock, saveSizes(data.size || data.sizes),
+            data.image || '', data.description || '', status
+        ];
 
         const [result] = await db.query(
             'INSERT INTO products (seller_id, product_name, brand, brand_code, sell_price, stock, sizes, image, description, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [sellerId, product, brand, brandCode, sell, stock, sizes, image, description, status]
+            values
         );
 
-        console.log('Product inserted into MySQL. product_id:', result.insertId);
         res.status(201).json({
             id: result.insertId,
             product,
             sell: String(sell),
-            priceValue: sell,
             stock: String(stock),
-            image,
+            image: data.image || '',
             sellerId,
-            brand,
-            code: brandCode,
-            size: parseSizes(sizes),
-            description,
+            brand: data.brand || '',
+            code: data.code || '',
+            size: readSizes(saveSizes(data.size || data.sizes)),
+            description: data.description || '',
             status
         });
     } catch (error) {
-        console.error('POST /api/product MySQL error:', error.code || '', error.message);
-        res.status(500).json({
-            message: 'Hindi na-save ang product sa MySQL.',
-            details: error.message,
-            code: error.code || null
-        });
+        console.error('POST product:', error.message);
+        res.status(500).json({ message: 'Hindi na-save ang product sa MySQL.', details: error.message });
     }
 });
 
 // UPDATE product
 app.put('/api/product/:id', async (req, res) => {
     try {
-        const body = req.body || {};
-        const productValue = body.product ?? body.name ?? body.productName ?? '';
-        const product = String(typeof productValue === 'object' && productValue !== null ? (productValue.name ?? '') : productValue).trim();
-        const sell = Number(body.sell ?? body.priceValue ?? body.price ?? 0);
-        const stock = Number(body.stock ?? 0);
-        const brand = String(body.brand ?? '');
-        const brandCode = String(body.code ?? body.brandCode ?? body.brand_code ?? '');
-        const sizes = normalizeSizes(body.size ?? body.sizes);
-        const description = String(body.description ?? '');
-        const image = String(body.image ?? '');
-        const sellerId = body.sellerId ? String(body.sellerId) : null;
-        const status = body.status || 'pending';
+        const data = req.body;
+        const product = String(data.product || data.name || '').trim();
+        const sell = Number(data.sell || data.priceValue || data.price || 0);
+        const stock = Number(data.stock || 0);
 
-        if (!product) return res.status(400).json({ message: 'Product name is required.' });
-        if (!Number.isFinite(sell) || sell < 0) return res.status(400).json({ message: 'Selling price must be a valid non-negative number.' });
-        if (!Number.isInteger(stock) || stock < 0) return res.status(400).json({ message: 'Stock must be a non-negative whole number.' });
+        if (!product || !Number.isFinite(sell) || sell < 0 || !Number.isInteger(stock) || stock < 0) {
+            return res.status(400).json({ message: 'Check product name, selling price, and stock.' });
+        }
 
-        const [result] = await db.query(
+        await db.query(
             'UPDATE products SET seller_id = ?, product_name = ?, brand = ?, brand_code = ?, sell_price = ?, stock = ?, sizes = ?, image = ?, description = ?, status = ? WHERE product_id = ?',
-            [sellerId, product, brand, brandCode, sell, stock, sizes, image, description, status, req.params.id]
+            [
+                data.sellerId || null, product, data.brand || '', data.code || '',
+                sell, stock, saveSizes(data.size || data.sizes), data.image || '',
+                data.description || '', data.status || 'pending', req.params.id
+            ]
         );
 
-        res.json({ message: 'Product Updated', affectedRows: result.affectedRows });
+        res.json({ message: 'Product Updated' });
     } catch (error) {
-        console.error('PUT /api/product/:id MySQL error:', error.code || '', error.message);
-        res.status(500).json({ message: error.message, code: error.code || null });
+        console.error('PUT product:', error.message);
+        res.status(500).json({ message: error.message });
     }
 });
 
@@ -155,31 +127,19 @@ app.delete('/api/product/:id', async (req, res) => {
         await db.query('DELETE FROM products WHERE product_id = ?', [req.params.id]);
         res.json({ message: 'Product Deleted' });
     } catch (error) {
+        console.error('DELETE product:', error.message);
         res.status(500).json({ message: error.message });
     }
 });
 
+// Check MySQL connection
 app.get('/api/health', async (req, res) => {
     try {
         await db.query('SELECT 1');
-        res.json({ status: 'ok', database: 'connected', name: 'shoe_inventory_db' });
+        res.json({ status: 'ok', database: 'connected' });
     } catch (error) {
-        res.status(500).json({ status: 'error', database: 'disconnected', message: error.message });
+        res.status(500).json({ status: 'error', message: error.message });
     }
 });
 
-app.use((error, req, res, next) => {
-    if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
-        console.error('Invalid JSON request:', error.message);
-        return res.status(400).json({ message: 'Invalid JSON sent by the frontend.', details: error.message });
-    }
-    if (error) {
-        console.error('Server error:', error.message);
-        return res.status(error.status || 500).json({ message: error.message || 'Internal server error.' });
-    }
-    next();
-});
-
-app.listen(PORT, () => {
-    console.log(`Server running ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));
