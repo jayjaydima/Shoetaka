@@ -13,6 +13,25 @@ const firebaseApp = initializeApp({
 });
 const auth = getAuth(firebaseApp);
 
+// Verify Firebase ID tokens before allowing access to protected endpoints.
+async function requireFirebaseUser(req, res, next) {
+    const authorization = req.headers.authorization || '';
+    const token = authorization.startsWith('Bearer ')
+        ? authorization.slice(7)
+        : '';
+
+    if (!token) {
+        return res.status(401).json({ message: 'Missing Firebase ID token.' });
+    }
+
+    try {
+        req.firebaseUser = await auth.verifyIdToken(token);
+        next();
+    } catch (error) {
+        return res.status(401).json({ message: 'Invalid or expired Firebase ID token.' });
+    }
+}
+
 // 3. Create the server
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -42,7 +61,45 @@ db.getConnection()
         console.log('Database Error:', error.message);
     });
 
-// 5. GET - Get all products
+// 5. POST - Create or update the signed-in user's MySQL profile.
+// UID and email come from the verified Firebase token, never from the request body.
+// Existing role and account_status values are deliberately preserved.
+app.post('/api/auth/sync', requireFirebaseUser, async (req, res) => {
+    try {
+        const firebaseUser = req.firebaseUser;
+        const requestedName = typeof req.body?.displayName === 'string'
+            ? req.body.displayName.trim()
+            : '';
+        const requestedPhone = typeof req.body?.phone === 'string'
+            ? req.body.phone.trim()
+            : '';
+        const email = firebaseUser.email || '';
+        const fullName = requestedName || firebaseUser.name ||
+            (email ? email.split('@')[0] : 'Shoe-Taka User');
+
+        await db.query(
+            `
+                INSERT INTO users (firebase_uid, full_name, email, phone)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    full_name = VALUES(full_name),
+                    email = VALUES(email),
+                    phone = VALUES(phone)
+            `,
+            [firebaseUser.uid, fullName, email, requestedPhone || null]
+        );
+
+        res.json({
+            message: 'User profile synced successfully.',
+            firebaseUid: firebaseUser.uid
+        });
+    } catch (error) {
+        console.error('User profile sync failed:', error.message);
+        res.status(500).json({ message: 'Could not sync user profile to the database.' });
+    }
+});
+
+// 6. GET - Get all products
 app.get('/api/product', async (req, res) => {
     try {
         const [products] = await db.query('SELECT * FROM products');
@@ -67,7 +124,7 @@ app.get('/api/product', async (req, res) => {
     }
 });
 
-// 6. POST - Add a product
+// 7. POST - Add a product
 app.post('/api/product', async (req, res) => {
     try {
         const data = req.body;
@@ -115,7 +172,7 @@ app.post('/api/product', async (req, res) => {
     }
 });
 
-// 7. PUT - Update a product
+// 8. PUT - Update a product
 app.put('/api/product/:id', async (req, res) => {
     try {
         const data = req.body;
@@ -149,7 +206,7 @@ app.put('/api/product/:id', async (req, res) => {
     }
 });
 
-// 8. DELETE - Delete a product
+// 9. DELETE - Delete a product
 app.delete('/api/product/:id', async (req, res) => {
     try {
         await db.query(
@@ -163,7 +220,7 @@ app.delete('/api/product/:id', async (req, res) => {
     }
 });
 
-// 9. Start the server
+// 10. Start the server
 app.listen(PORT, () => {
     console.log('Server running on port ' + PORT);
 });
