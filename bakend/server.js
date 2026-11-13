@@ -1,4 +1,5 @@
-// 1. Import packages
+// 1. Load environment variables and import packages
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
@@ -14,17 +15,21 @@ const auth = getAuth(firebaseApp);
 
 // 3. Create the server
 const app = express();
-const PORT = 8080;
+const PORT = Number(process.env.PORT || 8080);
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 
 // 4. Connect to MySQL
 const db = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'shoe_inventory_db'
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || 3306),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'shoe_inventory_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
 // Check database connection
