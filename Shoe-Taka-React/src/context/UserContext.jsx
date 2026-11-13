@@ -149,6 +149,50 @@ export function UserProvider({ children }) {
     : true
   const profile = uid && profileState.uid === uid ? profileState.data : null
 
+  // Sync the signed-in Firebase account to MySQL. The backend verifies the
+  // ID token and takes the UID/email from that verified token.
+  useEffect(() => {
+    if (!firebaseUser || !profileReady) return undefined
+
+    let cancelled = false
+
+    const syncUser = async () => {
+      try {
+        const idToken = await firebaseUser.getIdToken()
+        const response = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            displayName: profile?.displayName || firebaseUser.displayName || '',
+            phone: profile?.phone || '',
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || 'User profile sync failed.')
+        }
+
+        if (!cancelled) {
+          console.info('Firebase user synced to MySQL.')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Could not sync Firebase user to MySQL:', error)
+        }
+      }
+    }
+
+    syncUser()
+
+    return () => {
+      cancelled = true
+    }
+  }, [firebaseUser, profileReady, profile])
+
   const loading = initializing || !profileReady
   const role = firebaseUser && profileReady ? profile?.role || 'student' : null
   const isAdmin = role === 'admin'
