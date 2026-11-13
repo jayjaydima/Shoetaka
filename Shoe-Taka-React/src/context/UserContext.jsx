@@ -152,7 +152,10 @@ export function UserProvider({ children }) {
   // Sync the signed-in Firebase account to MySQL. The backend verifies the
   // ID token and takes the UID/email from that verified token.
   useEffect(() => {
-    if (!firebaseUser || !profileReady) return undefined
+    // Do not wait for Firestore profile permissions/loading: Firebase Auth
+    // already provides a verified-in-client session and the backend verifies
+    // the ID token before writing the MySQL user row.
+    if (!firebaseUser) return undefined
 
     let cancelled = false
 
@@ -191,7 +194,7 @@ export function UserProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [firebaseUser, profileReady, profile])
+  }, [firebaseUser, profile])
 
   const loading = initializing || !profileReady
   const role = firebaseUser && profileReady ? profile?.role || 'student' : null
