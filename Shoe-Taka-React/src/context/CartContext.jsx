@@ -83,7 +83,7 @@ function updateNotificationReadState(uid, ids = null) {
 
 export function CartProvider({ children }) {
   const { products, adjustStock } = useProducts()
-  const { firebaseUser, isAdmin, isSellerMode } = useUser()
+  const { firebaseUser, isAdmin, isSellerMode, role } = useUser()
   const uid = firebaseUser?.uid || null
 
   // ---------------- Temporary frontend cart ----------------
@@ -141,7 +141,7 @@ export function CartProvider({ children }) {
 
     loadOrders()
     return () => { active = false }
-  }, [uid, firebaseUser])
+  }, [uid, firebaseUser, role])
 
   const orders = useMemo(
     () =>
