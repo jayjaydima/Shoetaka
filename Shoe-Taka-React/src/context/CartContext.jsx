@@ -168,7 +168,7 @@ export function CartProvider({ children }) {
 
   // ---------------- Cart actions ----------------
   function addToCart(productId, size, quantity = 1) {
-    const product = products.find((item) => item.id === productId)
+    const product = products.find((item) => String(item.id) === String(productId))
     const key = makeCartKey(productId, size)
 
     if (!product || product.stock <= 0 || !Number.isInteger(quantity) || quantity < 1) return
@@ -211,7 +211,7 @@ export function CartProvider({ children }) {
     const items = Object.entries(selectedCart)
       .map(([cartKey, qty]) => {
         const { productId, size } = parseCartKey(cartKey)
-        const product = products.find((p) => p.id === productId)
+        const product = products.find((p) => String(p.id) === String(productId))
         if (!product) return null
 
         return {
