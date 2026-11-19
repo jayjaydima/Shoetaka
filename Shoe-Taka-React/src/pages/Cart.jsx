@@ -26,7 +26,7 @@ function Cart() {
   const selectedQty = selectedEntry?.[1] || 0
   const selectedProductInfo = selectedEntry ? (() => {
     const { productId, size } = parseCartKey(selectedEntry[0])
-    return { product: PRODUCTS.find((prod) => prod.id === productId), size }
+    return { product: PRODUCTS.find((prod) => String(prod.id) === String(productId)), size }
   })() : null
   const selectedTotal = selectedProductInfo?.product ? selectedProductInfo.product.priceValue * selectedQty : 0
 
@@ -93,7 +93,7 @@ function Cart() {
               <div className="cart-items-list">
                 {entries.map(([cartKey, qty]) => {
                   const { productId, size } = parseCartKey(cartKey)
-                  const p = PRODUCTS.find((prod) => prod.id === productId)
+                  const p = PRODUCTS.find((prod) => String(prod.id) === String(productId))
                   if (!p) return null
                   return (
                     <article className="cart-product-item" key={cartKey}>
