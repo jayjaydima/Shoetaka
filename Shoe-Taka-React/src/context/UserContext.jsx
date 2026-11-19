@@ -42,6 +42,7 @@ const DEFAULT_SELLER_PROFILE = {
 
 export function UserProvider({ children }) {
   const [firebaseUser, setFirebaseUser] = useState(null)
+  const [mysqlRole, setMysqlRole] = useState(null)
   const [initializing, setInitializing] = useState(true)
   const [profileState, setProfileState] = useState({
     uid: null,
@@ -65,6 +66,7 @@ export function UserProvider({ children }) {
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
       setFirebaseUser(u)
+      setMysqlRole(null)
       setInitializing(false)
     })
   }, [])
@@ -179,7 +181,16 @@ export function UserProvider({ children }) {
           throw new Error(errorData.message || 'User profile sync failed.')
         }
 
+        const roleResponse = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+        const roleData = await roleResponse.json().catch(() => ({}))
+        if (!roleResponse.ok) {
+          throw new Error(roleData.message || 'Could not load account role from MySQL.')
+        }
+
         if (!cancelled) {
+          setMysqlRole(roleData.role || null)
           console.info('Firebase user synced to MySQL.')
         }
       } catch (error) {
@@ -197,7 +208,7 @@ export function UserProvider({ children }) {
   }, [firebaseUser, profile])
 
   const loading = initializing || !profileReady
-  const role = firebaseUser && profileReady ? profile?.role || 'student' : null
+  const role = firebaseUser && profileReady ? mysqlRole || profile?.role || 'student' : null
   const isAdmin = role === 'admin'
   const isStudent = role === 'student'
 
