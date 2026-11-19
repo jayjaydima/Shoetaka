@@ -99,6 +99,18 @@ app.post('/api/auth/sync', requireFirebaseUser, async (req, res) => {
     }
 });
 
+// Return the database-managed role for the verified Firebase account.
+app.get('/api/auth/me', requireFirebaseUser, async (req, res) => {
+    try {
+        const currentUser = await getDatabaseUser(req.firebaseUser.uid);
+        if (!currentUser) return res.status(403).json({ message: 'Your account is not active or is not registered.' });
+        res.json({ uid: currentUser.firebase_uid, role: currentUser.role });
+    } catch (error) {
+        console.error('Load account role failed:', error.message);
+        res.status(500).json({ message: 'Could not load account role.' });
+    }
+});
+
 // Resolve authorization from MySQL. Never trust a role sent by the browser.
 async function getDatabaseUser(firebaseUid) {
     const [rows] = await db.query(
@@ -186,7 +198,6 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
     try {
         const currentUser = await getDatabaseUser(req.firebaseUser.uid);
         if (!currentUser) {
-            connection.release();
             return res.status(403).json({ message: 'Your account is not active or is not registered.' });
         }
 
@@ -194,7 +205,6 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
         const paymentMethod = String(req.body?.paymentMethod || '').trim();
         const requestedItems = req.body?.items;
         if (!buyer.name?.trim() || !buyer.address?.trim() || !buyer.contactNumber?.trim()) {
-            connection.release();
             return res.status(400).json({ message: 'Buyer name, delivery address, and contact number are required.' });
         }
         if (!['GCash', 'Maya', 'COD'].includes(paymentMethod)) {
@@ -322,9 +332,16 @@ app.put('/api/orders/:id/status', requireFirebaseUser, async (req, res) => {
                 [order.order_id, req.firebaseUser.uid]
             );
             if (!ownedItems.length) throw new Error('You do not have permission to update this order.');
-            if (status === 'Cancelled') throw new Error('Only the buyer or admin can cancel an order.');
-        } else if (currentUser.role !== 'admin' && order.buyer_id !== req.firebaseUser.uid) {
-            throw new Error('You do not have permission to update this order.');
+            if (!['Processing', 'Shipped', 'Delivered'].includes(status)) {
+                throw new Error('Sellers can only move their orders to Processing, Shipped, or Delivered.');
+            }
+        } else if (currentUser.role !== 'admin') {
+            if (order.buyer_id !== req.firebaseUser.uid || status !== 'Cancelled') {
+                throw new Error('Buyers can only cancel their own orders.');
+            }
+            if (!['New', 'Processing'].includes(order.status)) {
+                throw new Error('This order can no longer be cancelled.');
+            }
         }
 
         if (status === 'Cancelled' && order.status !== 'Cancelled') {
