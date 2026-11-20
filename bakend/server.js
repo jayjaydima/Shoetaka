@@ -467,6 +467,26 @@ app.put('/api/orders/:id/status', requireFirebaseUser, async (req, res) => {
         }
         await connection.query('UPDATE orders SET status = ? WHERE order_id = ?', [status, order.order_id]);
         await connection.query('UPDATE order_items SET status = ? WHERE order_id = ?', [status, order.order_id]);
+
+        await insertNotification(
+            connection,
+            order.buyer_id,
+            status === 'Cancelled' ? 'Order cancelled' : 'Order status updated',
+            'Your order ' + order.order_number + ' is now ' + status + '.',
+            status === 'Cancelled' ? 'cancel' : 'order',
+            order.order_id
+        );
+        const [sellerRows] = await connection.query(
+            'SELECT DISTINCT seller_id FROM order_items WHERE order_id = ? AND seller_id IS NOT NULL',
+            [order.order_id]
+        );
+        for (const seller of sellerRows) {
+            await insertNotification(
+                connection, seller.seller_id, 'Order status updated',
+                'Order ' + order.order_number + ' is now ' + status + '.',
+                status === 'Cancelled' ? 'cancel' : 'order', order.order_id
+            );
+        }
         await connection.commit();
         res.json({ message: 'Order status updated.', status });
     } catch (error) {
