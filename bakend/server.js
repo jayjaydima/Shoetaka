@@ -152,6 +152,91 @@ function mapOrderRows(orderRows, itemRows) {
     }));
 }
 
+// Persistent notifications and saved addresses for the authenticated account.
+async function insertNotification(executor, uid, title, message, type, orderId = null) {
+    await executor.query(
+        'INSERT INTO notifications (firebase_uid, title, message, notification_type, related_order_id) VALUES (?, ?, ?, ?, ?)',
+        [uid, title, message, type, orderId]
+    );
+}
+
+app.get('/api/addresses', requireFirebaseUser, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            'SELECT address_id, recipient_name, phone, address_line, city, province, postal_code, is_default, created_at, updated_at FROM addresses WHERE firebase_uid = ? ORDER BY is_default DESC, updated_at DESC',
+            [req.firebaseUser.uid]
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error('Get addresses failed:', error.message);
+        res.status(500).json({ message: 'Could not load saved addresses.' });
+    }
+});
+
+app.get('/api/notifications', requireFirebaseUser, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            'SELECT notification_id, title, message, notification_type, related_order_id, is_read, created_at FROM notifications WHERE firebase_uid = ? ORDER BY created_at DESC, notification_id DESC',
+            [req.firebaseUser.uid]
+        );
+        res.json(rows.map(row => ({
+            id: String(row.notification_id), title: row.title, message: row.message,
+            type: row.notification_type || 'update',
+            orderId: row.related_order_id ? String(row.related_order_id) : null,
+            read: Boolean(row.is_read), createdAt: row.created_at
+        })));
+    } catch (error) {
+        console.error('Get notifications failed:', error.message);
+        res.status(500).json({ message: 'Could not load notifications.' });
+    }
+});
+
+app.patch('/api/notifications/read', requireFirebaseUser, async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : null;
+        if (ids && ids.length) {
+            const marks = ids.map(() => '?').join(',');
+            await db.query('UPDATE notifications SET is_read = 1 WHERE firebase_uid = ? AND notification_id IN (' + marks + ')', [req.firebaseUser.uid, ...ids]);
+        } else if (!ids) {
+            await db.query('UPDATE notifications SET is_read = 1 WHERE firebase_uid = ?', [req.firebaseUser.uid]);
+        }
+        res.json({ message: 'Notifications marked as read.' });
+    } catch (error) {
+        console.error('Mark notifications read failed:', error.message);
+        res.status(500).json({ message: 'Could not update notifications.' });
+    }
+});
+
+app.post('/api/addresses', requireFirebaseUser, async (req, res) => {
+    const data = req.body || {};
+    const recipientName = String(data.recipientName || '').trim();
+    const phone = String(data.phone || '').trim();
+    const addressLine = String(data.addressLine || '').trim();
+    if (!recipientName || !phone || !addressLine) {
+        return res.status(400).json({ message: 'Recipient name, phone, and address are required.' });
+    }
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        if (data.isDefault !== false) {
+            await connection.query('UPDATE addresses SET is_default = 0 WHERE firebase_uid = ?', [req.firebaseUser.uid]);
+        }
+        const [result] = await connection.query(
+            'INSERT INTO addresses (firebase_uid, recipient_name, phone, address_line, city, province, postal_code, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [req.firebaseUser.uid, recipientName, phone, addressLine, data.city || null, data.province || null, data.postalCode || null, data.isDefault === false ? 0 : 1]
+        );
+        await connection.commit();
+        const [rows] = await db.query('SELECT address_id, recipient_name, phone, address_line, city, province, postal_code, is_default, created_at, updated_at FROM addresses WHERE address_id = ?', [result.insertId]);
+        res.status(201).json(rows[0]);
+    } catch (error) {
+        await connection.rollback();
+        console.error('Save address failed:', error.message);
+        res.status(500).json({ message: 'Could not save address.' });
+    } finally {
+        connection.release();
+    }
+});
+
 // 6. GET - Orders visible to the authenticated buyer, seller, or admin.
 app.get('/api/orders', requireFirebaseUser, async (req, res) => {
     try {
