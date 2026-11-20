@@ -20,6 +20,7 @@ export const ORDER_STATUSES = [
 
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const ORDERS_API_URL = `${API_URL}/api/orders`
+const NOTIFICATIONS_API_URL = `${API_URL}/api/notifications`
 
 const CartContext = createContext(null)
 
@@ -110,12 +111,21 @@ export function CartProvider({ children }) {
 
   // ---------------- Temporary frontend orders ----------------
   const [allOrders, setAllOrders] = useState(() => getAllOrders())
-  const [notifications, setNotifications] = useState(() => getNotifications(uid))
+  const [notifications, setNotifications] = useState([])
   const [ordersError, setOrdersError] = useState('')
 
   useEffect(() => {
     let active = true
-    setNotifications(getNotifications(uid))
+    async function loadNotifications() {
+      if (!firebaseUser) { setNotifications([]); return }
+      try {
+        const token = await firebaseUser.getIdToken()
+        const response = await fetch(NOTIFICATIONS_API_URL, { headers: { Authorization: `Bearer ${token}` } })
+        const data = await response.json().catch(() => [])
+        if (!response.ok) throw new Error(data.message || 'Could not load notifications.')
+        if (active) setNotifications(Array.isArray(data) ? data : [])
+      } catch (error) { console.error('Load notifications failed:', error) }
+    }
 
     async function loadOrders() {
       if (!firebaseUser) {
@@ -140,6 +150,7 @@ export function CartProvider({ children }) {
     }
 
     loadOrders()
+    loadNotifications()
     return () => { active = false }
   }, [uid, firebaseUser, role])
 
@@ -162,8 +173,14 @@ export function CartProvider({ children }) {
 
   const unreadNotifications = notifications.filter((item) => !item.read).length
 
-  function refreshNotifications() {
-    setNotifications(getNotifications(uid))
+  async function refreshNotifications() {
+    if (!firebaseUser) return
+    try {
+      const token = await firebaseUser.getIdToken()
+      const response = await fetch(NOTIFICATIONS_API_URL, { headers: { Authorization: `Bearer ${token}` } })
+      const data = await response.json().catch(() => [])
+      if (response.ok) setNotifications(Array.isArray(data) ? data : [])
+    } catch (error) { console.error('Refresh notifications failed:', error) }
   }
 
   // ---------------- Cart actions ----------------
@@ -309,9 +326,16 @@ export function CartProvider({ children }) {
     refreshNotifications()
   }
 
-  function markNotificationsRead(ids = null) {
-    const next = updateNotificationReadState(uid, ids)
-    setNotifications(next)
+  async function markNotificationsRead(ids = null) {
+    if (!firebaseUser) return
+    const token = await firebaseUser.getIdToken()
+    const response = await fetch(`${NOTIFICATIONS_API_URL}/read`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(ids ? { ids } : {}),
+    })
+    if (!response.ok) throw new Error('Could not mark notifications as read.')
+    await refreshNotifications()
   }
 
   const cartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0)
