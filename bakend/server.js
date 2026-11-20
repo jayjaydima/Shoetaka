@@ -378,6 +378,36 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
             );
         }
 
+        // Save the buyer's latest checkout address as their default address.
+        await connection.query('UPDATE addresses SET is_default = 0 WHERE firebase_uid = ?', [req.firebaseUser.uid]);
+        await connection.query(
+            'INSERT INTO addresses (firebase_uid, recipient_name, phone, address_line, is_default) VALUES (?, ?, ?, ?, 1)',
+            [req.firebaseUser.uid, buyer.name.trim(), buyer.contactNumber.trim(), buyer.address.trim()]
+        );
+
+        // Record the selected payment method. This does not verify GCash or Maya payment.
+        await connection.query(
+            'INSERT INTO payments (order_id, payment_method, amount, payment_status) VALUES (?, ?, ?, ?)',
+            [orderResult.insertId, paymentMethod, total, 'Pending']
+        );
+
+        await insertNotification(
+            connection, req.firebaseUser.uid, 'Order placed successfully',
+            'Your order ' + orderNumber + ' has been placed and is awaiting processing.',
+            'order', orderResult.insertId
+        );
+        const [sellerRows] = await connection.query(
+            'SELECT DISTINCT seller_id FROM order_items WHERE order_id = ? AND seller_id IS NOT NULL',
+            [orderResult.insertId]
+        );
+        for (const seller of sellerRows) {
+            await insertNotification(
+                connection, seller.seller_id, 'New customer order',
+                'You received a new order (' + orderNumber + ').',
+                'order', orderResult.insertId
+            );
+        }
+
         await connection.commit();
         const [savedOrders] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderResult.insertId]);
         const [savedItems] = await db.query('SELECT * FROM order_items WHERE order_id = ?', [orderResult.insertId]);
