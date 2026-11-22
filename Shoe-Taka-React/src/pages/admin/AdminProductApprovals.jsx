@@ -9,7 +9,7 @@ function AdminProductApprovals() {
   const [notice, setNotice] = useState('')
   const pending = products.filter((product) => product.status === 'pending')
 
-  function handleReview(product, status) {
+  async function handleReview(product, status) {
     let reason = ''
     if (status === 'rejected') {
       reason = window.prompt(`Reason for rejecting "${product.name}" (optional):`) || ''
@@ -18,7 +18,7 @@ function AdminProductApprovals() {
     setNotice('')
     setBusyId(product.id)
     try {
-      reviewProduct(product.id, status, reason)
+      await reviewProduct(product.id, status, reason)
       setNotice(status === 'approved' ? `${product.name} approved.` : `${product.name} rejected.`)
     } catch (err) {
       setError(err.message || 'Could not update product status.')
