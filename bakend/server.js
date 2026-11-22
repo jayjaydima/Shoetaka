@@ -5,6 +5,7 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { randomUUID } = require('crypto');
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
     ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
     : require('./serviceAccountKey.json');
@@ -46,7 +47,7 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
 app.use(cors({
     origin(origin, callback) {
         // Allow server-to-server and local tools with no Origin header.
-        if (!origin || allowedOrigins.length === 0 ||
+        if (!origin ||
             allowedOrigins.includes(origin) ||
             (process.env.NODE_ENV !== 'production' &&
              /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
@@ -352,6 +353,7 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
     try {
         const currentUser = await getDatabaseUser(req.firebaseUser.uid);
         if (!currentUser) {
+            connection.release();
             return res.status(403).json({ message: 'Your account is not active or is not registered.' });
         }
 
@@ -359,6 +361,7 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
         const paymentMethod = String(req.body?.paymentMethod || '').trim();
         const requestedItems = req.body?.items;
         if (!buyer.name?.trim() || !buyer.address?.trim() || !buyer.contactNumber?.trim()) {
+            connection.release();
             return res.status(400).json({ message: 'Buyer name, delivery address, and contact number are required.' });
         }
         if (!['GCash', 'Maya', 'COD'].includes(paymentMethod)) {
@@ -409,7 +412,7 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
         }
 
         const total = Number(verifiedItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
-        const orderNumber = `ORD-${Date.now().toString(36).slice(-6).toUpperCase()}`;
+        const orderNumber = `ORD-${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
         const [orderResult] = await connection.query(
             'INSERT INTO orders (order_number, buyer_id, buyer_email, buyer_name, delivery_address, contact_number, payment_method, status, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
