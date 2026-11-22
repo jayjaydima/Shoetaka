@@ -29,6 +29,8 @@ import {
   writeUserValue,
 } from '../data/storage.js'
 
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
 const UserContext = createContext(null)
 
 const DEFAULT_SELLER_PROFILE = {
@@ -164,7 +166,7 @@ export function UserProvider({ children }) {
     const syncUser = async () => {
       try {
         const idToken = await firebaseUser.getIdToken()
-        const response = await fetch('/api/auth/sync', {
+        const response = await fetch(`${API_URL}/api/auth/sync`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -181,7 +183,7 @@ export function UserProvider({ children }) {
           throw new Error(errorData.message || 'User profile sync failed.')
         }
 
-        const roleResponse = await fetch('/api/auth/me', {
+        const roleResponse = await fetch(`${API_URL}/api/auth/me`, {
           headers: { Authorization: `Bearer ${idToken}` },
         })
         const roleData = await roleResponse.json().catch(() => ({}))

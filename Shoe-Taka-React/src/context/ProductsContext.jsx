@@ -104,9 +104,11 @@ export function ProductsProvider({ children }) {
       createId('product')
     )
 
+    if (!firebaseUser) throw new Error('Please sign in before adding a product.')
+    const token = await firebaseUser.getIdToken()
     const response = await fetch(PRODUCT_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         product: product.name,
         name: product.name,
@@ -149,9 +151,11 @@ export function ProductsProvider({ children }) {
       updatedAtMs: Date.now(),
     })
 
+    if (!firebaseUser) throw new Error('Please sign in before updating a product.')
+    const token = await firebaseUser.getIdToken()
     const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         product: updatedProduct.name,
         sell: String(updatedProduct.priceValue),
@@ -193,7 +197,12 @@ export function ProductsProvider({ children }) {
       throw new Error('You can only delete your own products.')
     }
 
-    const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!firebaseUser) throw new Error('Please sign in before deleting a product.')
+    const token = await firebaseUser.getIdToken()
+    const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
     const result = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(result.message || 'Hindi ma-delete ang product sa MySQL.')
 
