@@ -5,7 +5,23 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
-const serviceAccount = require('./serviceAccountKey.json');
+const fs = require('fs');
+const path = require('path');
+
+let serviceAccount;
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } catch (error) {
+        throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON. Paste the full Firebase service-account JSON into Render Environment.');
+    }
+} else {
+    const localServiceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
+    if (!fs.existsSync(localServiceAccountPath)) {
+        throw new Error('Firebase Admin credentials are missing. Set FIREBASE_SERVICE_ACCOUNT in Render Environment, or provide bakend/serviceAccountKey.json for local development.');
+    }
+    serviceAccount = require(localServiceAccountPath);
+}
 
 // 2. Initialize Firebase Admin (modular API)
 const firebaseApp = initializeApp({
