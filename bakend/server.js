@@ -101,6 +101,26 @@ if (dbMode === 'local') {
 console.log('Database mode:', dbMode);
 const db = mysql.createPool(dbConfig);
 
+// Public health endpoint for Render. Reports API and database status without
+// exposing credentials or internal connection details.
+app.get('/health', async (req, res) => {
+    try {
+        await db.query('SELECT 1');
+        res.status(200).json({
+            status: 'ok',
+            api: 'up',
+            database: 'connected'
+        });
+    } catch (error) {
+        console.error('Health check database failure:', error.message);
+        res.status(503).json({
+            status: 'error',
+            api: 'up',
+            database: 'disconnected'
+        });
+    }
+});
+
 // Check database connection
 db.getConnection()
     .then(connection => {
