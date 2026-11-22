@@ -39,17 +39,51 @@ const PORT = Number(process.env.PORT || 8080);
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 
-// 4. Connect to MySQL
-const db = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'shoe_inventory_db',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+// 4. Connect to MySQL: local XAMPP by default, or TiDB Cloud when DB_MODE=tidb.
+// Keep the existing DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME variables
+// for local development so the current XAMPP setup continues to work.
+const dbMode = String(process.env.DB_MODE || 'local').trim().toLowerCase();
+let dbConfig;
+
+if (dbMode === 'local') {
+    dbConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        port: Number(process.env.DB_PORT || 3306),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'shoe_inventory_db',
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+    };
+} else if (dbMode === 'tidb') {
+    const requiredTiDBSettings = ['TIDB_HOST', 'TIDB_USER', 'TIDB_PASSWORD'];
+    const missingTiDBSettings = requiredTiDBSettings.filter(name => !process.env[name]);
+    if (missingTiDBSettings.length) {
+        throw new Error('DB_MODE=tidb requires these environment variables: ' + missingTiDBSettings.join(', '));
+    }
+
+    dbConfig = {
+        host: process.env.TIDB_HOST,
+        port: Number(process.env.TIDB_PORT || 4000),
+        user: process.env.TIDB_USER,
+        password: process.env.TIDB_PASSWORD,
+        database: process.env.TIDB_DATABASE || 'shoe_inventory_db',
+        // TiDB Cloud requires encrypted connections. mysql2 negotiates TLS
+        // using the trusted certificate store provided by the Node.js runtime.
+        ssl: { minVersion: 'TLSv1.2' },
+        waitForConnections: true,
+        connectionLimit: 5,
+        queueLimit: 0,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0
+    };
+} else {
+    throw new Error('Invalid DB_MODE. Use "local" or "tidb".');
+}
+
+console.log('Database mode:', dbMode);
+const db = mysql.createPool(dbConfig);
 
 // Check database connection
 db.getConnection()
