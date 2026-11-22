@@ -1,2 +1,10 @@
 bakend/node_modules/
 Shoe-Taka-React/node_modules/
+
+# Firebase credentials
+/bakend/serviceAccountKey.json
+
+# Environment variables
+/bakend/.env
+
+node_modules/

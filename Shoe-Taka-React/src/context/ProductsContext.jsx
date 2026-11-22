@@ -1,11 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { PRODUCTS as SEED_PRODUCTS } from '../data/products.js'
-import {
-  STORAGE_KEYS,
-  readJSON,
-  writeJSON,
-  createId,
-} from '../data/storage.js'
+import { createId, STORAGE_KEYS, writeJSON } from '../data/storage.js'
 import { useUser } from './UserContext.jsx'
 
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
@@ -26,7 +20,7 @@ function normalizeProduct(product, fallbackId) {
       : ['7', '8', '9', '10'],
     description: String(product.description || '').trim(),
     condition: String(product.condition || 'New').trim(),
-    stock: Math.max(0, Number(product.stock) || 10),
+    stock: Math.max(0, Number(product.stock) || 0),
     sellerId: product.sellerId || null,
     status: ['pending', 'approved', 'rejected'].includes(product.status)
       ? product.status
@@ -37,17 +31,21 @@ function normalizeProduct(product, fallbackId) {
   }
 }
 
-function readProducts() {
-  const saved = readJSON(STORAGE_KEYS.products, null)
-  if (Array.isArray(saved) && saved.length > 0) {
-    return saved.map((p) => normalizeProduct(p))
-  }
-
-  const seeded = SEED_PRODUCTS.map((p, index) =>
-    normalizeProduct({ ...p, status: 'approved' }, p.id || `seed-${index}`)
-  )
-  writeJSON(STORAGE_KEYS.products, seeded)
-  return seeded
+function mapServerProduct(item) {
+  return normalizeProduct({
+    id: item.id,
+    name: item.product,
+    brand: item.brand || '',
+    code: item.code || '',
+    priceValue: Number(item.sell) || 0,
+    stock: Number(item.stock) || 0,
+    image: item.image || '/items/samba.avif',
+    size: item.size || ['7', '8', '9', '10'],
+    description: item.description || '',
+    sellerId: item.sellerId || null,
+    status: item.status || (item.sellerId ? 'pending' : 'approved'),
+    rejectionReason: item.rejectionReason || '',
+  })
 }
 
 export function ProductsProvider({ children }) {
@@ -58,54 +56,37 @@ export function ProductsProvider({ children }) {
 
   useEffect(() => {
     let active = true
-    const localProducts = readProducts()
-    setProducts(localProducts)
-    setLoading(false)
 
-    async function syncServerProducts() {
+    async function loadServerProducts() {
+      setLoading(true)
       try {
         const response = await fetch(PRODUCT_API_URL)
-        if (!response.ok) throw new Error('Hindi makuha ang products mula sa server.')
+        if (!response.ok) throw new Error('Hindi makuha ang products mula sa MySQL server.')
         const serverItems = await response.json()
-        if (!Array.isArray(serverItems) || !active) return
+        if (!Array.isArray(serverItems)) throw new Error('Invalid ang products response mula sa server.')
 
-        const serverProducts = serverItems.map((item) => normalizeProduct({
-          id: item.id,
-          name: item.product,
-          brand: item.brand || '',
-          code: item.code || '',
-          priceValue: Number(item.sell) || 0,
-          stock: Number(item.stock) || 0,
-          image: item.image || '/items/samba.avif',
-          size: item.size || ['7', '8', '9', '10'],
-          description: item.description || '',
-          sellerId: item.sellerId || null,
-          status: item.status || (item.sellerId ? 'pending' : 'approved'),
-          rejectionReason: item.rejectionReason || '',
-        }))
-        const merged = [...localProducts]
-        serverProducts.forEach((serverProduct) => {
-          const index = merged.findIndex((item) => String(item.id) === String(serverProduct.id))
-          if (index >= 0) merged[index] = serverProduct
-          else merged.push(serverProduct)
-        })
         if (active) {
-          setProducts(merged)
-          writeJSON(STORAGE_KEYS.products, merged)
+          setProducts(serverItems.map(mapServerProduct))
           setError('')
         }
       } catch (err) {
-        if (active) setError(err.message || 'Product server is unavailable.')
+        if (active) {
+          setProducts([])
+          setError(err.message || 'Hindi ma-connect ang MySQL product server.')
+        }
+      } finally {
+        if (active) setLoading(false)
       }
     }
 
-    syncServerProducts()
+    loadServerProducts()
     return () => { active = false }
   }, [])
 
   function saveProducts(nextProducts) {
     const normalized = nextProducts.map((p) => normalizeProduct(p))
     setProducts(normalized)
+    // This is only a convenience cache; product loading always comes from MySQL.
     writeJSON(STORAGE_KEYS.products, normalized)
   }
 
@@ -127,12 +108,9 @@ export function ProductsProvider({ children }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // Send compatible name keys so the API can read the product name
-        // regardless of which form naming convention is used.
         product: product.name,
         name: product.name,
         productName: product.name,
-        buy: String(data.buy ?? '0'),
         sell: String(product.priceValue),
         stock: String(product.stock),
         image: product.image,
@@ -145,20 +123,9 @@ export function ProductsProvider({ children }) {
       }),
     })
     const result = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(result.message || 'Hindi ma-save ang product sa server.')
+    if (!response.ok) throw new Error(result.message || 'Hindi ma-save ang product sa MySQL.')
 
-    const savedProduct = normalizeProduct({
-      ...product,
-      ...result,
-      id: result.id,
-      name: result.product || product.name,
-      priceValue: Number(result.sell ?? product.priceValue),
-      stock: Number(result.stock ?? product.stock),
-      image: result.image || product.image,
-      brand: result.brand || product.brand,
-      code: result.code || product.code,
-      size: result.size || product.size,
-    })
+    const savedProduct = mapServerProduct(result)
     saveProducts([...products, savedProduct])
     return savedProduct
   }
@@ -182,70 +149,61 @@ export function ProductsProvider({ children }) {
       updatedAtMs: Date.now(),
     })
 
-    if (Number.isFinite(Number(id))) {
-      const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: updatedProduct.name,
-          buy: String(updates.buy ?? existing.buy ?? '0'),
-          sell: String(updatedProduct.priceValue),
-          stock: String(updatedProduct.stock),
-          image: updatedProduct.image,
-          brand: updatedProduct.brand,
-          code: updatedProduct.code,
-          size: updatedProduct.size,
-          description: updatedProduct.description,
-          sellerId: updatedProduct.sellerId,
-          status: updatedProduct.status,
-        }),
-      })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(result.message || 'Hindi ma-update ang product sa server.')
-    }
+    const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product: updatedProduct.name,
+        sell: String(updatedProduct.priceValue),
+        stock: String(updatedProduct.stock),
+        image: updatedProduct.image,
+        brand: updatedProduct.brand,
+        code: updatedProduct.code,
+        size: updatedProduct.size,
+        description: updatedProduct.description,
+        sellerId: updatedProduct.sellerId,
+        status: updatedProduct.status,
+      }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.message || 'Hindi ma-update ang product sa MySQL.')
 
-    saveProducts(products.map((p) => p.id === id ? updatedProduct : p))
+    saveProducts(products.map((p) => String(p.id) === String(id) ? updatedProduct : p))
     return updatedProduct
   }
 
-  function reviewProduct(id, status, rejectionReason = '') {
+  async function reviewProduct(id, status, rejectionReason = '') {
     if (!isAdmin) throw new Error('Only admins can review products.')
     if (!['approved', 'rejected'].includes(status)) {
       throw new Error('Invalid product review status.')
     }
-    const existing = products.find((p) => p.id === id)
+    const existing = products.find((p) => String(p.id) === String(id))
     if (!existing) throw new Error('Product not found.')
-    saveProducts(products.map((p) =>
-      p.id === id
-        ? normalizeProduct({
-            ...p,
-            status,
-            rejectionReason: status === 'rejected' ? rejectionReason.trim() : '',
-            updatedAtMs: Date.now(),
-          })
-        : p
-    ))
+
+    const updatedProduct = await updateProduct(id, {
+      status,
+      rejectionReason: status === 'rejected' ? rejectionReason.trim() : '',
+    })
+    return updatedProduct
   }
 
   async function deleteProduct(id) {
-    const product = products.find((p) => p.id === id)
+    const product = products.find((p) => String(p.id) === String(id))
     if (!isAdmin && product?.sellerId !== firebaseUser?.uid) {
       throw new Error('You can only delete your own products.')
     }
 
-    if (Number.isFinite(Number(id))) {
-      const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, { method: 'DELETE' })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(result.message || 'Hindi ma-delete ang product sa server.')
-    }
+    const response = await fetch(`${PRODUCT_API_URL}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.message || 'Hindi ma-delete ang product sa MySQL.')
 
-    saveProducts(products.filter((p) => p.id !== id))
+    saveProducts(products.filter((p) => String(p.id) !== String(id)))
   }
 
   function adjustStock(id, delta) {
     setProducts((prev) => {
       const next = prev.map((product) =>
-        product.id === id
+        String(product.id) === String(id)
           ? {
               ...product,
               stock: Math.max(0, product.stock + Number(delta)),
@@ -258,13 +216,9 @@ export function ProductsProvider({ children }) {
     })
   }
 
+  // Product seeding is intentionally disabled: MySQL is the only source of products.
   function seedProducts() {
-    const existingIds = new Set(products.map((p) => p.id))
-    const missing = SEED_PRODUCTS.filter((p) => !existingIds.has(p.id))
-      .map((p) => normalizeProduct({ ...p, status: 'approved' }))
-    if (missing.length === 0) return 0
-    saveProducts([...products, ...missing])
-    return missing.length
+    return 0
   }
 
   const value = {

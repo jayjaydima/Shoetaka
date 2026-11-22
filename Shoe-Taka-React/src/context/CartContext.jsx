@@ -18,6 +18,10 @@ export const ORDER_STATUSES = [
   'Cancelled',
 ]
 
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const ORDERS_API_URL = `${API_URL}/api/orders`
+const NOTIFICATIONS_API_URL = `${API_URL}/api/notifications`
+
 const CartContext = createContext(null)
 
 export function parseCartKey(cartKey) {
@@ -80,7 +84,7 @@ function updateNotificationReadState(uid, ids = null) {
 
 export function CartProvider({ children }) {
   const { products, adjustStock } = useProducts()
-  const { firebaseUser, isAdmin, isSellerMode } = useUser()
+  const { firebaseUser, isAdmin, isSellerMode, role } = useUser()
   const uid = firebaseUser?.uid || null
 
   // ---------------- Temporary frontend cart ----------------
@@ -107,13 +111,48 @@ export function CartProvider({ children }) {
 
   // ---------------- Temporary frontend orders ----------------
   const [allOrders, setAllOrders] = useState(() => getAllOrders())
-  const [notifications, setNotifications] = useState(() => getNotifications(uid))
+  const [notifications, setNotifications] = useState([])
   const [ordersError, setOrdersError] = useState('')
 
   useEffect(() => {
-    setAllOrders(getAllOrders())
-    setNotifications(getNotifications(uid))
-  }, [uid])
+    let active = true
+    async function loadNotifications() {
+      if (!firebaseUser) { setNotifications([]); return }
+      try {
+        const token = await firebaseUser.getIdToken()
+        const response = await fetch(NOTIFICATIONS_API_URL, { headers: { Authorization: `Bearer ${token}` } })
+        const data = await response.json().catch(() => [])
+        if (!response.ok) throw new Error(data.message || 'Could not load notifications.')
+        if (active) setNotifications(Array.isArray(data) ? data : [])
+      } catch (error) { console.error('Load notifications failed:', error) }
+    }
+
+    async function loadOrders() {
+      if (!firebaseUser) {
+        setAllOrders([])
+        setOrdersError('')
+        return
+      }
+      try {
+        const token = await firebaseUser.getIdToken()
+        const response = await fetch(ORDERS_API_URL, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await response.json().catch(() => [])
+        if (!response.ok) throw new Error(data.message || 'Could not load orders.')
+        if (active) {
+          setAllOrders(Array.isArray(data) ? data : [])
+          setOrdersError('')
+        }
+      } catch (error) {
+        if (active) setOrdersError(error.message || 'Could not load orders.')
+      }
+    }
+
+    loadOrders()
+    loadNotifications()
+    return () => { active = false }
+  }, [uid, firebaseUser, role])
 
   const orders = useMemo(
     () =>
@@ -134,13 +173,19 @@ export function CartProvider({ children }) {
 
   const unreadNotifications = notifications.filter((item) => !item.read).length
 
-  function refreshNotifications() {
-    setNotifications(getNotifications(uid))
+  async function refreshNotifications() {
+    if (!firebaseUser) return
+    try {
+      const token = await firebaseUser.getIdToken()
+      const response = await fetch(NOTIFICATIONS_API_URL, { headers: { Authorization: `Bearer ${token}` } })
+      const data = await response.json().catch(() => [])
+      if (response.ok) setNotifications(Array.isArray(data) ? data : [])
+    } catch (error) { console.error('Refresh notifications failed:', error) }
   }
 
   // ---------------- Cart actions ----------------
   function addToCart(productId, size, quantity = 1) {
-    const product = products.find((item) => item.id === productId)
+    const product = products.find((item) => String(item.id) === String(productId))
     const key = makeCartKey(productId, size)
 
     if (!product || product.stock <= 0 || !Number.isInteger(quantity) || quantity < 1) return
@@ -183,7 +228,7 @@ export function CartProvider({ children }) {
     const items = Object.entries(selectedCart)
       .map(([cartKey, qty]) => {
         const { productId, size } = parseCartKey(cartKey)
-        const product = products.find((p) => p.id === productId)
+        const product = products.find((p) => String(p.id) === String(productId))
         if (!product) return null
 
         return {
@@ -201,74 +246,34 @@ export function CartProvider({ children }) {
 
     if (items.length === 0) return null
 
-    const order = {
-      id: createId('order'),
-      orderNumber: `ORD-${Date.now().toString(36).slice(-6).toUpperCase()}`,
-      userId: uid,
-      userEmail: firebaseUser?.email || '',
-      buyer,
-      paymentMethod,
-      items,
-      total: items.reduce((sum, item) => sum + item.price * item.qty, 0),
-      status: 'New',
-      placedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    const nextOrders = [order, ...allOrders]
-    saveAllOrders(nextOrders)
-    setAllOrders(nextOrders)
-
-    // TEMPORARY FRONTEND INVENTORY UPDATE:
-    // When Express is connected, move this stock deduction into the server.
-    const quantitiesByProduct = {}
-    items.forEach((item) => {
-      quantitiesByProduct[item.productId] =
-        (quantitiesByProduct[item.productId] || 0) + item.qty
+    const token = await firebaseUser.getIdToken()
+    const response = await fetch(ORDERS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        buyer,
+        paymentMethod,
+        items: items.map((item) => ({
+          productId: item.productId,
+          size: item.size,
+          qty: item.qty,
+        })),
+      }),
     })
-    Object.entries(quantitiesByProduct).forEach(([productId, qty]) => {
-      const product = products.find((item) => item.id === productId)
-      if (product) {
-        adjustStock(productId, -qty)
-      }
-    })
+    const savedOrder = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(savedOrder.message || 'Could not place order.')
 
-    // Create one seller notification per seller represented in the order.
-    const sellerIds = [
-      ...new Set(items.map((item) => item.sellerId).filter(Boolean)),
-    ]
-
-    sellerIds.forEach((sellerId) => {
-      const sellerItems = items.filter((item) => item.sellerId === sellerId)
-      const sellerTotal = sellerItems.reduce(
-        (sum, item) => sum + item.price * item.qty,
-        0
-      )
-      addNotification(sellerId, {
-        type: 'order',
-        title: 'New Order Received',
-        message: `${buyer.name || 'A customer'} ordered ${sellerItems[0].name}${sellerItems.length > 1 ? ` and ${sellerItems.length - 1} more item(s)` : ''}.`,
-        orderId: order.id,
-        amount: sellerTotal,
-      })
-    })
-
-    // Customer gets a confirmation notification too.
-    addNotification(uid, {
-      type: 'order',
-      title: 'Order Placed',
-      message: `Your order ${order.orderNumber} has been received.`,
-      orderId: order.id,
-      amount: order.total,
-    })
-
-    refreshNotifications()
+    setAllOrders((previous) => [savedOrder, ...previous.filter((item) => item.id !== savedOrder.id)])
+    setOrdersError('')
     setCart((currentCart) => {
       const remaining = { ...currentCart }
       Object.keys(selectedCart).forEach((cartKey) => delete remaining[cartKey])
       return remaining
     })
-    return order
+    return savedOrder
   }
 
   async function cancelOrder(orderId) {
@@ -277,43 +282,17 @@ export function CartProvider({ children }) {
     if (order.status !== 'New' && order.status !== 'Processing') {
       throw new Error('This order can no longer be cancelled.')
     }
-
-    const updated = {
-      ...order,
-      status: 'Cancelled',
-      updatedAt: new Date().toISOString(),
-    }
-    const next = allOrders.map((item) => (item.id === orderId ? updated : item))
-    saveAllOrders(next)
-    setAllOrders(next)
-
-    // TEMPORARY FRONTEND INVENTORY UPDATE:
-    // Restore stock when a cancellable order is cancelled.
-    const quantitiesByProduct = {}
-    order.items.forEach((item) => {
-      quantitiesByProduct[item.productId] =
-        (quantitiesByProduct[item.productId] || 0) + item.qty
+    const token = await firebaseUser.getIdToken()
+    const response = await fetch(`${ORDERS_API_URL}/${encodeURIComponent(orderId)}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: 'Cancelled' }),
     })
-    Object.entries(quantitiesByProduct).forEach(([productId, qty]) => {
-      const product = products.find((item) => item.id === productId)
-      if (product) {
-        adjustStock(productId, qty)
-      }
-    })
-
-    const sellerIds = [
-      ...new Set(order.items.map((item) => item.sellerId).filter(Boolean)),
-    ]
-    sellerIds.forEach((sellerId) => {
-      addNotification(sellerId, {
-        type: 'cancel',
-        title: 'Order Cancelled',
-        message: `${buyerLabel(order)} cancelled order ${order.orderNumber}.`,
-        orderId: order.id,
-        amount: order.total,
-      })
-    })
-    refreshNotifications()
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.message || 'Could not cancel order.')
+    setAllOrders((previous) => previous.map((item) =>
+      item.id === orderId ? { ...item, status: 'Cancelled' } : item
+    ))
   }
 
   function buyerLabel(order) {
@@ -321,34 +300,18 @@ export function CartProvider({ children }) {
   }
 
   async function setOrderStatus(orderId, status) {
-    if (!ORDER_STATUSES.includes(status)) {
-      throw new Error(`Invalid status: ${status}`)
-    }
-
-    const order = allOrders.find((item) => item.id === orderId)
-    if (!order) throw new Error('Order not found.')
-
-    const ownsOrder = order.items?.some((item) => item.sellerId === uid)
-    if (!isAdmin && !ownsOrder) {
-      throw new Error('You do not have permission to update this order.')
-    }
-
-    const updated = {
-      ...order,
-      status,
-      updatedAt: new Date().toISOString(),
-    }
-    const next = allOrders.map((item) => (item.id === orderId ? updated : item))
-    saveAllOrders(next)
-    setAllOrders(next)
-
-    addNotification(order.userId, {
-      type: status === 'Cancelled' ? 'cancel' : 'status',
-      title: status === 'Cancelled' ? 'Order Cancelled' : 'Order Status Updated',
-      message: `${order.orderNumber} is now ${status}.`,
-      orderId: order.id,
-      amount: order.total,
+    if (!ORDER_STATUSES.includes(status)) throw new Error(`Invalid status: ${status}`)
+    const token = await firebaseUser.getIdToken()
+    const response = await fetch(`${ORDERS_API_URL}/${encodeURIComponent(orderId)}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status }),
     })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.message || 'Could not update order status.')
+    setAllOrders((previous) => previous.map((item) =>
+      item.id === orderId ? { ...item, status } : item
+    ))
   }
 
   function deleteOrder(orderId) {
@@ -363,9 +326,16 @@ export function CartProvider({ children }) {
     refreshNotifications()
   }
 
-  function markNotificationsRead(ids = null) {
-    const next = updateNotificationReadState(uid, ids)
-    setNotifications(next)
+  async function markNotificationsRead(ids = null) {
+    if (!firebaseUser) return
+    const token = await firebaseUser.getIdToken()
+    const response = await fetch(`${NOTIFICATIONS_API_URL}/read`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(ids ? { ids } : {}),
+    })
+    if (!response.ok) throw new Error('Could not mark notifications as read.')
+    await refreshNotifications()
   }
 
   const cartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0)

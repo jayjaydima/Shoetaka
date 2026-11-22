@@ -42,6 +42,7 @@ const DEFAULT_SELLER_PROFILE = {
 
 export function UserProvider({ children }) {
   const [firebaseUser, setFirebaseUser] = useState(null)
+  const [mysqlRole, setMysqlRole] = useState(null)
   const [initializing, setInitializing] = useState(true)
   const [profileState, setProfileState] = useState({
     uid: null,
@@ -65,6 +66,7 @@ export function UserProvider({ children }) {
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
       setFirebaseUser(u)
+      setMysqlRole(null)
       setInitializing(false)
     })
   }, [])
@@ -149,8 +151,64 @@ export function UserProvider({ children }) {
     : true
   const profile = uid && profileState.uid === uid ? profileState.data : null
 
+  // Sync the signed-in Firebase account to MySQL. The backend verifies the
+  // ID token and takes the UID/email from that verified token.
+  useEffect(() => {
+    // Do not wait for Firestore profile permissions/loading: Firebase Auth
+    // already provides a verified-in-client session and the backend verifies
+    // the ID token before writing the MySQL user row.
+    if (!firebaseUser) return undefined
+
+    let cancelled = false
+
+    const syncUser = async () => {
+      try {
+        const idToken = await firebaseUser.getIdToken()
+        const response = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            displayName: profile?.displayName || firebaseUser.displayName || '',
+            phone: profile?.phone || '',
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || 'User profile sync failed.')
+        }
+
+        const roleResponse = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+        const roleData = await roleResponse.json().catch(() => ({}))
+        if (!roleResponse.ok) {
+          throw new Error(roleData.message || 'Could not load account role from MySQL.')
+        }
+
+        if (!cancelled) {
+          setMysqlRole(roleData.role || null)
+          console.info('Firebase user synced to MySQL.')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Could not sync Firebase user to MySQL:', error)
+        }
+      }
+    }
+
+    syncUser()
+
+    return () => {
+      cancelled = true
+    }
+  }, [firebaseUser, profile])
+
   const loading = initializing || !profileReady
-  const role = firebaseUser && profileReady ? profile?.role || 'student' : null
+  const role = firebaseUser && profileReady ? mysqlRole || profile?.role || 'student' : null
   const isAdmin = role === 'admin'
   const isStudent = role === 'student'
 
