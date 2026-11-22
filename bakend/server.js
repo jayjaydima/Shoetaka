@@ -5,7 +5,9 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
-const serviceAccount = require('./serviceAccountKey.json');
+const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    : require('./serviceAccountKey.json');
 
 // 2. Initialize Firebase Admin (modular API)
 const firebaseApp = initializeApp({
@@ -36,7 +38,25 @@ async function requireFirebaseUser(req, res, next) {
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+app.use(cors({
+    origin(origin, callback) {
+        // Allow server-to-server and local tools with no Origin header.
+        if (!origin || allowedOrigins.length === 0 ||
+            allowedOrigins.includes(origin) ||
+            (process.env.NODE_ENV !== 'production' &&
+             /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
+            return callback(null, true);
+        }
+        return callback(new Error('Origin not allowed by CORS.'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '25mb' }));
 
 // 4. Connect to MySQL: local XAMPP by default, or TiDB Cloud when DB_MODE=tidb.
@@ -85,15 +105,30 @@ if (dbMode === 'local') {
 console.log('Database mode:', dbMode);
 const db = mysql.createPool(dbConfig);
 
-// Check database connection
-db.getConnection()
-    .then(connection => {
+// Database connectivity is checked before the HTTP server starts.
+async function startServer() {
+    const connection = await db.getConnection();
+    try {
+        await connection.query('SELECT 1');
         console.log('Database Connected');
+    } finally {
         connection.release();
-    })
-    .catch(error => {
-        console.log('Database Error:', error.message);
+    }
+
+    app.listen(PORT, () => {
+        console.log('Server running on port ' + PORT);
     });
+}
+
+app.get('/health', async (req, res) => {
+    try {
+        await db.query('SELECT 1');
+        res.json({ status: 'ok', database: 'connected' });
+    } catch (error) {
+        console.error('Health check failed:', error.message);
+        res.status(503).json({ status: 'error', database: 'unavailable' });
+    }
+});
 
 // 5. POST - Create or update the signed-in user's MySQL profile.
 // UID and email come from the verified Firebase token, never from the request body.
@@ -557,13 +592,21 @@ app.get('/api/product', async (req, res) => {
 });
 
 // 7. POST - Add a product
-app.post('/api/product', async (req, res) => {
+app.post('/api/product', requireFirebaseUser, async (req, res) => {
     try {
-        const data = req.body;
+        const currentUser = await getDatabaseUser(req.firebaseUser.uid);
+        if (!currentUser || !['seller', 'admin'].includes(currentUser.role)) {
+            return res.status(403).json({ message: 'Seller or admin access required.' });
+        }
+        const data = req.body || {};
 
         const sizes = Array.isArray(data.size) ? data.size.join(', ') : '';
-        const sellerId = data.sellerId || null;
-        const status = data.status || (sellerId ? 'pending' : 'approved');
+        const sellerId = currentUser.role === 'admin'
+            ? (data.sellerId || null)
+            : req.firebaseUser.uid;
+        const status = currentUser.role === 'admin'
+            ? (data.status || (sellerId ? 'pending' : 'approved'))
+            : 'pending';
 
         const sql = `
             INSERT INTO products
@@ -605,9 +648,21 @@ app.post('/api/product', async (req, res) => {
 });
 
 // 8. PUT - Update a product
-app.put('/api/product/:id', async (req, res) => {
+app.put('/api/product/:id', requireFirebaseUser, async (req, res) => {
     try {
-        const data = req.body;
+        const currentUser = await getDatabaseUser(req.firebaseUser.uid);
+        if (!currentUser || !['seller', 'admin'].includes(currentUser.role)) {
+            return res.status(403).json({ message: 'Seller or admin access required.' });
+        }
+        const [existingRows] = await db.query(
+            'SELECT seller_id FROM products WHERE product_id = ? LIMIT 1',
+            [req.params.id]
+        );
+        if (!existingRows.length) return res.status(404).json({ message: 'Product not found.' });
+        if (currentUser.role !== 'admin' && existingRows[0].seller_id !== req.firebaseUser.uid) {
+            return res.status(403).json({ message: 'You can only update your own products.' });
+        }
+        const data = req.body || {};
         const sizes = Array.isArray(data.size) ? data.size.join(', ') : '';
 
         const sql = `
@@ -618,7 +673,7 @@ app.put('/api/product/:id', async (req, res) => {
         `;
 
         const values = [
-            data.sellerId || null,
+            currentUser.role === 'admin' ? (data.sellerId || null) : req.firebaseUser.uid,
             data.product,
             data.brand || '',
             data.code || '',
@@ -627,7 +682,7 @@ app.put('/api/product/:id', async (req, res) => {
             sizes,
             data.image || '',
             data.description || '',
-            data.status || 'pending',
+            currentUser.role === 'admin' ? (data.status || 'pending') : 'pending',
             req.params.id
         ];
 
@@ -639,20 +694,29 @@ app.put('/api/product/:id', async (req, res) => {
 });
 
 // 9. DELETE - Delete a product
-app.delete('/api/product/:id', async (req, res) => {
+app.delete('/api/product/:id', requireFirebaseUser, async (req, res) => {
     try {
-        await db.query(
-            'DELETE FROM products WHERE product_id = ?',
+        const currentUser = await getDatabaseUser(req.firebaseUser.uid);
+        if (!currentUser || !['seller', 'admin'].includes(currentUser.role)) {
+            return res.status(403).json({ message: 'Seller or admin access required.' });
+        }
+        const [existingRows] = await db.query(
+            'SELECT seller_id FROM products WHERE product_id = ? LIMIT 1',
             [req.params.id]
         );
-
+        if (!existingRows.length) return res.status(404).json({ message: 'Product not found.' });
+        if (currentUser.role !== 'admin' && existingRows[0].seller_id !== req.firebaseUser.uid) {
+            return res.status(403).json({ message: 'You can only delete your own products.' });
+        }
+        await db.query('DELETE FROM products WHERE product_id = ?', [req.params.id]);
         res.json({ message: 'Product Deleted' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// 10. Start the server
-app.listen(PORT, () => {
-    console.log('Server running on port ' + PORT);
+// 10. Start only after the database connection is confirmed.
+startServer().catch(error => {
+    console.error('Server startup failed:', error.message);
+    process.exit(1);
 });
