@@ -83,7 +83,7 @@ function updateNotificationReadState(uid, ids = null) {
 }
 
 export function CartProvider({ children }) {
-  const { products, adjustStock } = useProducts()
+  const { products, loading: productsLoading, error: productsError } = useProducts()
   const { firebaseUser, isAdmin, isSellerMode, role } = useUser()
   const uid = firebaseUser?.uid || null
 
@@ -108,6 +108,25 @@ export function CartProvider({ children }) {
     // Replace cart saving with PUT /api/cart/:uid later.
     writeJSON(cartStorageKey, cart)
   }, [cart, cartReadyKey, cartStorageKey])
+
+  // Remove stale cart entries left by older catalogs/local storage.
+  // The MySQL products API is the source of truth for product IDs and stock.
+  useEffect(() => {
+    if (cartReadyKey !== cartStorageKey || productsLoading || productsError) return
+
+    const validCart = {}
+    Object.entries(cart).forEach(([cartKey, quantity]) => {
+      const { productId } = parseCartKey(cartKey)
+      const product = products.find((item) => String(item.id) === String(productId))
+      const requestedQty = Number(quantity)
+      if (!product || !Number.isInteger(requestedQty) || requestedQty < 1 || Number(product.stock) < 1) return
+      validCart[cartKey] = Math.min(requestedQty, Number(product.stock))
+    })
+
+    if (JSON.stringify(validCart) !== JSON.stringify(cart)) {
+      setCart(validCart)
+    }
+  }, [cart, cartReadyKey, cartStorageKey, products, productsLoading, productsError])
 
   // ---------------- Temporary frontend orders ----------------
   const [allOrders, setAllOrders] = useState(() => getAllOrders())
@@ -225,26 +244,29 @@ export function CartProvider({ children }) {
   async function placeOrder(buyer, paymentMethod, selectedCart = cart) {
     if (!uid) throw new Error('Please log in to place an order.')
 
-    const items = Object.entries(selectedCart)
-      .map(([cartKey, qty]) => {
-        const { productId, size } = parseCartKey(cartKey)
-        const product = products.find((p) => String(p.id) === String(productId))
-        if (!product) return null
+    const items = Object.entries(selectedCart).map(([cartKey, qty]) => {
+      const { productId, size } = parseCartKey(cartKey)
+      const product = products.find((p) => String(p.id) === String(productId))
+      if (!product) {
+        throw new Error('The cart contains an outdated product (ID ' + productId + '). Remove it and add the product again from the Store.')
+      }
+      if (!Number.isInteger(Number(qty)) || Number(qty) < 1 || Number(qty) > Number(product.stock)) {
+        throw new Error('The quantity for "' + product.name + '" is no longer available. Please update your cart.')
+      }
 
-        return {
-          id: cartKey,
-          productId,
-          sellerId: product.sellerId || null,
-          name: product.name,
-          img: product.image,
-          price: product.priceValue,
-          size,
-          qty,
-        }
-      })
-      .filter(Boolean)
+      return {
+        id: cartKey,
+        productId: product.id,
+        sellerId: product.sellerId || null,
+        name: product.name,
+        img: product.image,
+        price: product.priceValue,
+        size,
+        qty: Number(qty),
+      }
+    })
 
-    if (items.length === 0) return null
+    if (items.length === 0) throw new Error('Your cart is empty. Add an available product from the Store.')
 
     const token = await firebaseUser.getIdToken()
     const response = await fetch(ORDERS_API_URL, {
@@ -342,7 +364,7 @@ export function CartProvider({ children }) {
 
   const cartTotal = Object.entries(cart).reduce((sum, [cartKey, qty]) => {
     const { productId } = parseCartKey(cartKey)
-    const product = products.find((p) => p.id === productId)
+    const product = products.find((p) => String(p.id) === String(productId))
     return sum + (product ? product.priceValue * qty : 0)
   }, 0)
 
