@@ -156,16 +156,23 @@ app.post('/api/auth/sync', requireFirebaseUser, async (req, res) => {
         const fullName = requestedName || firebaseUser.name ||
             (email ? email.split('@')[0] : 'Shoe-Taka User');
 
+        // TiDB does not auto-generate users.user_id in this schema.
+        // Allocate it from a dedicated AUTO_INCREMENT sequence table.
+        const [userSequenceResult] = await db.query(
+            'INSERT INTO user_id_sequence () VALUES ()'
+        );
+        const userId = userSequenceResult.insertId;
+
         await db.query(
             `
-                INSERT INTO users (firebase_uid, full_name, email, phone)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO users (user_id, firebase_uid, full_name, email, phone)
+                VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     full_name = VALUES(full_name),
                     email = VALUES(email),
                     phone = VALUES(phone)
             `,
-            [firebaseUser.uid, fullName, email, requestedPhone || null]
+            [userId, firebaseUser.uid, fullName, email, requestedPhone || null]
         );
 
         res.json({
