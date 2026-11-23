@@ -52,7 +52,7 @@ function Cart() {
       navigate('/orders')
     } catch (err) {
       console.error('Checkout failed:', err)
-      setCheckoutError('Could not place your order. Please try again.')
+      setCheckoutError(err?.message || 'Could not place your order. Please try again.')
       setPlacing(false)
     }
   }
