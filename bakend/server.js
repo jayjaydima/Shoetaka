@@ -445,9 +445,16 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
         );
 
         for (const item of verifiedItems) {
+            // Allocate order_item_id from a dedicated AUTO_INCREMENT sequence table for TiDB.
+            const [itemSequenceResult] = await connection.query(
+                'INSERT INTO order_item_id_sequence () VALUES ()'
+            );
+            const orderItemId = itemSequenceResult.insertId;
+
             await connection.query(
-                'INSERT INTO order_items (order_id, product_id, seller_id, product_name, image, unit_price, shoe_size, quantity, line_total, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO order_items (order_item_id, order_id, product_id, seller_id, product_name, image, unit_price, shoe_size, quantity, line_total, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [
+                    orderItemId,
                     orderId,
                     item.productId,
                     item.sellerId,
