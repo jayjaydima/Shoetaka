@@ -420,9 +420,18 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
 
         const total = Number(verifiedItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2));
         const orderNumber = `ORD-${Date.now().toString(36).slice(-6).toUpperCase()}`;
-        const [orderResult] = await connection.query(
-            'INSERT INTO orders (order_number, buyer_id, buyer_email, buyer_name, delivery_address, contact_number, payment_method, status, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+
+        // TiDB does not allow adding AUTO_INCREMENT to the existing orders.order_id
+        // column. Allocate IDs from a dedicated AUTO_INCREMENT sequence table instead.
+        const [sequenceResult] = await connection.query(
+            'INSERT INTO order_id_sequence () VALUES ()'
+        );
+        const orderId = sequenceResult.insertId;
+
+        await connection.query(
+            'INSERT INTO orders (order_id, order_number, buyer_id, buyer_email, buyer_name, delivery_address, contact_number, payment_method, status, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
+                orderId,
                 orderNumber,
                 req.firebaseUser.uid,
                 req.firebaseUser.email || null,
@@ -439,7 +448,7 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
             await connection.query(
                 'INSERT INTO order_items (order_id, product_id, seller_id, product_name, image, unit_price, shoe_size, quantity, line_total, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [
-                    orderResult.insertId,
+                    orderId,
                     item.productId,
                     item.sellerId,
                     item.name,
@@ -467,29 +476,29 @@ app.post('/api/orders', requireFirebaseUser, async (req, res) => {
         // Record the selected payment method. This does not verify GCash or Maya payment.
         await connection.query(
             'INSERT INTO payments (order_id, payment_method, amount, payment_status) VALUES (?, ?, ?, ?)',
-            [orderResult.insertId, paymentMethod, total, 'Pending']
+            [orderId, paymentMethod, total, 'Pending']
         );
 
         await insertNotification(
             connection, req.firebaseUser.uid, 'Order placed successfully',
             'Your order ' + orderNumber + ' has been placed and is awaiting processing.',
-            'order', orderResult.insertId
+            'order', orderId
         );
         const [sellerRows] = await connection.query(
             'SELECT DISTINCT seller_id FROM order_items WHERE order_id = ? AND seller_id IS NOT NULL',
-            [orderResult.insertId]
+            [orderId]
         );
         for (const seller of sellerRows) {
             await insertNotification(
                 connection, seller.seller_id, 'New customer order',
                 'You received a new order (' + orderNumber + ').',
-                'order', orderResult.insertId
+                'order', orderId
             );
         }
 
         await connection.commit();
-        const [savedOrders] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderResult.insertId]);
-        const [savedItems] = await db.query('SELECT * FROM order_items WHERE order_id = ?', [orderResult.insertId]);
+        const [savedOrders] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+        const [savedItems] = await db.query('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
         res.status(201).json(mapOrderRows(savedOrders, savedItems)[0]);
     } catch (error) {
         await connection.rollback();
